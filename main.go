@@ -59,8 +59,9 @@ func parseArgs() (*Timer, error) {
 func showHelp() {
 	fmt.Println("Usage: pomo [duration] | pomo rest [duration]")
 	fmt.Println("Examples:")
-	fmt.Println("  pomo 30     # 30 seconds work timer")
+	fmt.Println("  pomo 30     # 30 minutes work timer")
 	fmt.Println("  pomo 30m    # 30 minutes work timer")
+	fmt.Println("  pomo 30s    # 30 seconds work timer")
 	fmt.Println("  pomo rest   # 15 minute break timer")
 	fmt.Println("  pomo rest 5m # 5 minute break timer")
 	fmt.Println("Default: 45 minutes work timer")
@@ -124,19 +125,22 @@ func createProgressBar(percentage float64, width int) string {
 }
 
 func parseDuration(arg string) (time.Duration, error) {
+	var unit = time.Minute // the default unit is minutes
+	
 	if strings.HasSuffix(arg, "m") {
-		minutes, err := strconv.Atoi(strings.TrimSuffix(arg, "m"))
-		if err != nil {
-			return 0, err
-		}
-		return time.Duration(minutes) * time.Minute, nil
+		arg = strings.TrimSuffix(arg, "m")
+		unit = time.Minute
+	} else if strings.HasSuffix(arg, "s") {
+		arg = strings.TrimSuffix(arg, "s")
+		unit = time.Second
 	}
 	
-	seconds, err := strconv.Atoi(arg)
+	value, err := strconv.Atoi(arg)
 	if err != nil {
 		return 0, err
 	}
-	return time.Duration(seconds) * time.Second, nil
+	
+	return time.Duration(value) * unit, nil
 }
 
 func (t *Timer) sendNotification() {
@@ -150,8 +154,11 @@ func (t *Timer) sendNotification() {
 	}
 	
 	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("osascript", "-e", fmt.Sprintf(`display notification "%s" with title "%s"`, message, title))
-		cmd.Run()
+		cmd := exec.Command("terminal-notifier", "-title", title, "-message", message, "-sound", "default")
+		err := cmd.Run()
+		if err != nil {
+			fmt.Printf("Debug: terminal-notifier not found. Install it with: brew install terminal-notifier\n")
+		}
 	} else {
 		cmd := exec.Command("notify-send", title, message)
 		cmd.Run()
