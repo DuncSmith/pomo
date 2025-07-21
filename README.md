@@ -1,6 +1,10 @@
 # pomo
 
-A simple, interactive Pomodoro timer for the terminal built with Go and [Bubbletea](https://github.com/charmbracelet/bubbletea).
+A simple, interactive CLI Pomodoro timer for the terminal built with Go and [Bubbletea](https://github.com/charmbracelet/bubbletea).
+
+<img width="782" height="93" alt="image" src="https://github.com/user-attachments/assets/aebf55c4-b6f3-4cb6-95da-a9419a626410" />
+
+Built using Claude Code.
 
 ## Features
 
