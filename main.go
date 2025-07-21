@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -20,6 +21,7 @@ type Model struct {
 	remaining time.Duration
 	isRest    bool
 	paused    bool
+	progress  progress.Model
 }
 
 func tickCmd() tea.Cmd {
@@ -42,6 +44,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.paused = !m.paused
 			return m, nil
 		}
+	case tea.WindowSizeMsg:
+		const padding = 4
+		const maxWidth = 80
+		m.progress.Width = msg.Width - padding - 20 // Leave space for time and percentage
+		if m.progress.Width > maxWidth {
+			m.progress.Width = maxWidth
+		}
+		if m.progress.Width < 20 {
+			m.progress.Width = 20
+		}
+		return m, nil
 	case tickMsg:
 		if !m.paused && m.remaining > 0 {
 			m.remaining -= time.Second
@@ -85,12 +98,13 @@ func (m Model) View() string {
 		}
 	} else {
 		timeStr := formatTime(m.remaining)
-		progressBar := createProgressBar(percentage, 30)
+		progressPercent := percentage / 100.0
+		progressBar := m.progress.ViewAs(progressPercent)
 		
 		if m.paused {
-			s.WriteString(fmt.Sprintf("⏸️  %s [%s] %.1f%% (PAUSED)\n", timeStr, progressBar, percentage))
+			s.WriteString(fmt.Sprintf("⏸️  %s %s %.1f%% (PAUSED)\n", timeStr, progressBar, percentage))
 		} else {
-			s.WriteString(fmt.Sprintf("⏰ %s [%s] %.1f%%\n", timeStr, progressBar, percentage))
+			s.WriteString(fmt.Sprintf("⏰ %s %s %.1f%%\n", timeStr, progressBar, percentage))
 		}
 		s.WriteString("\n")
 		s.WriteString("Press [space] to pause/resume, [q] to quit\n")
@@ -128,7 +142,12 @@ func parseArgs() (*Model, error) {
 				return nil, fmt.Errorf("invalid duration: %s", os.Args[2])
 			}
 		}
-		return &Model{duration: duration, remaining: duration, isRest: true}, nil
+		return &Model{
+			duration:  duration,
+			remaining: duration,
+			isRest:    true,
+			progress:  progress.New(progress.WithDefaultGradient()),
+		}, nil
 	}
 	
 	duration := 45 * time.Minute
@@ -140,7 +159,12 @@ func parseArgs() (*Model, error) {
 		}
 	}
 	
-	return &Model{duration: duration, remaining: duration, isRest: false}, nil
+	return &Model{
+		duration:  duration,
+		remaining: duration,
+		isRest:    false,
+		progress:  progress.New(progress.WithDefaultGradient()),
+	}, nil
 }
 
 func showHelp() {

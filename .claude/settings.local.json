@@ -3,7 +3,9 @@
     "allow": [
       "Bash(go mod init:*)",
       "Bash(go build:*)",
-      "Bash(go test:*)"
+      "Bash(go test:*)",
+      "Bash(go mod:*)",
+      "Bash(./pomo:*)"
     ],
     "deny": []
   }
