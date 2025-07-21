@@ -8,25 +8,112 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
-type Timer struct {
-	duration time.Duration
-	isRest   bool
+type tickMsg time.Time
+type finishedMsg struct{}
+
+type Model struct {
+	duration  time.Duration
+	remaining time.Duration
+	isRest    bool
+	paused    bool
+}
+
+func tickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return tickMsg(t)
+	})
+}
+
+func (m Model) Init() tea.Cmd {
+	return tickCmd()
+}
+
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case " ":
+			m.paused = !m.paused
+			return m, nil
+		}
+	case tickMsg:
+		if !m.paused && m.remaining > 0 {
+			m.remaining -= time.Second
+			if m.remaining <= 0 {
+				return m, func() tea.Msg { return finishedMsg{} }
+			}
+		}
+		return m, tickCmd()
+	case finishedMsg:
+		m.sendNotification()
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m Model) View() string {
+	var s strings.Builder
+	
+	emoji := "🍅"
+	title := "Pomodoro Timer"
+	if m.isRest {
+		emoji = "☕"
+		title = "Break Timer"
+	}
+	
+	if m.duration < time.Minute {
+		s.WriteString(fmt.Sprintf("%s %s: %d seconds\n", emoji, title, int(m.duration.Seconds())))
+	} else {
+		s.WriteString(fmt.Sprintf("%s %s: %.1f minutes\n", emoji, title, m.duration.Minutes()))
+	}
+	s.WriteString("\n")
+	
+	elapsed := m.duration - m.remaining
+	percentage := float64(elapsed) / float64(m.duration) * 100
+	
+	if m.remaining <= 0 {
+		if m.isRest {
+			s.WriteString("🎉 Break completed!\n")
+		} else {
+			s.WriteString("🎉 Pomodoro completed!\n")
+		}
+	} else {
+		timeStr := formatTime(m.remaining)
+		progressBar := createProgressBar(percentage, 30)
+		
+		if m.paused {
+			s.WriteString(fmt.Sprintf("⏸️  %s [%s] %.1f%% (PAUSED)\n", timeStr, progressBar, percentage))
+		} else {
+			s.WriteString(fmt.Sprintf("⏰ %s [%s] %.1f%%\n", timeStr, progressBar, percentage))
+		}
+		s.WriteString("\n")
+		s.WriteString("Press [space] to pause/resume, [q] to quit\n")
+	}
+	
+	return s.String()
 }
 
 func main() {
-	timer, err := parseArgs()
+	model, err := parseArgs()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 	
-	timer.displayHeader()
-	timer.start()
+	p := tea.NewProgram(*model)
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("Error running program: %v\n", err)
+		os.Exit(1)
+	}
 }
 
-func parseArgs() (*Timer, error) {
+func parseArgs() (*Model, error) {
 	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "--help") {
 		showHelp()
 		os.Exit(0)
@@ -41,7 +128,7 @@ func parseArgs() (*Timer, error) {
 				return nil, fmt.Errorf("invalid duration: %s", os.Args[2])
 			}
 		}
-		return &Timer{duration: duration, isRest: true}, nil
+		return &Model{duration: duration, remaining: duration, isRest: true}, nil
 	}
 	
 	duration := 45 * time.Minute
@@ -53,7 +140,7 @@ func parseArgs() (*Timer, error) {
 		}
 	}
 	
-	return &Timer{duration: duration, isRest: false}, nil
+	return &Model{duration: duration, remaining: duration, isRest: false}, nil
 }
 
 func showHelp() {
@@ -67,50 +154,6 @@ func showHelp() {
 	fmt.Println("Default: 45 minutes work timer")
 }
 
-func (t *Timer) displayHeader() {
-	emoji := "🍅"
-	title := "Pomodoro Timer"
-	if t.isRest {
-		emoji = "☕"
-		title = "Break Timer"
-	}
-	
-	if t.duration < time.Minute {
-		fmt.Printf("%s %s: %d seconds\n", emoji, title, int(t.duration.Seconds()))
-	} else {
-		fmt.Printf("%s %s: %.1f minutes\n", emoji, title, t.duration.Minutes())
-	}
-	fmt.Println()
-}
-
-func (t *Timer) start() {
-	remaining := t.duration
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	
-	for remaining > 0 {
-		elapsed := t.duration - remaining
-		percentage := float64(elapsed) / float64(t.duration) * 100
-		
-		fmt.Print("\033[2K\r")
-		fmt.Printf("⏰ %s [%s] %.1f%%", 
-			formatTime(remaining),
-			createProgressBar(percentage, 30),
-			percentage)
-		
-		<-ticker.C
-		remaining -= time.Second
-	}
-	
-	fmt.Print("\033[2K\r")
-	if t.isRest {
-		fmt.Println("🎉 Break completed!")
-	} else {
-		fmt.Println("🎉 Pomodoro completed!")
-	}
-	
-	t.sendNotification()
-}
 
 func formatTime(d time.Duration) string {
 	minutes := int(d.Minutes())
@@ -143,9 +186,9 @@ func parseDuration(arg string) (time.Duration, error) {
 	return time.Duration(value) * unit, nil
 }
 
-func (t *Timer) sendNotification() {
+func (m Model) sendNotification() {
 	var title, message string
-	if t.isRest {
+	if m.isRest {
 		title = "☕ Break Timer"
 		message = "Your break is complete!"
 	} else {
