@@ -1,0 +1,145 @@
+#!/bin/bash
+
+# ============================================================================
+# Create a versioned release of pomo
+#
+# Usage:
+#   bin/release patch    # v0.1.0 → v0.1.1
+#   bin/release minor    # v0.1.0 → v0.2.0
+#   bin/release major    # v0.1.0 → v1.0.0
+#   bin/release v1.2.3   # explicit version
+# ============================================================================
+
+set -euo pipefail
+
+readonly SCRIPT_NAME="$(basename "$0")"
+
+usage() {
+    echo "Usage: $SCRIPT_NAME <patch|minor|major|vX.Y.Z>"
+    echo
+    echo "Creates a git tag and pushes it to trigger the release workflow."
+    echo
+    echo "Examples:"
+    echo "  $SCRIPT_NAME patch    # bump patch version (v0.1.0 → v0.1.1)"
+    echo "  $SCRIPT_NAME minor    # bump minor version (v0.1.0 → v0.2.0)"
+    echo "  $SCRIPT_NAME major    # bump major version (v0.1.0 → v1.0.0)"
+    echo "  $SCRIPT_NAME v1.2.3  # set explicit version"
+    exit 0
+}
+
+get_latest_tag() {
+    git describe --tags --abbrev=0 2>/dev/null || echo ""
+}
+
+parse_version() {
+    local tag="$1"
+    tag="${tag#v}"
+    echo "$tag"
+}
+
+bump_version() {
+    local current="$1"
+    local bump_type="$2"
+
+    if [[ -z "$current" ]]; then
+        case "$bump_type" in
+            major) echo "1.0.0" ;;
+            minor) echo "0.1.0" ;;
+            patch) echo "0.0.1" ;;
+        esac
+        return
+    fi
+
+    local major minor patch
+    IFS='.' read -r major minor patch <<< "$current"
+
+    case "$bump_type" in
+        major) echo "$((major + 1)).0.0" ;;
+        minor) echo "${major}.$((minor + 1)).0" ;;
+        patch) echo "${major}.${minor}.$((patch + 1))" ;;
+    esac
+}
+
+validate_version() {
+    local ver="$1"
+    if [[ ! "$ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Error: invalid version format '$ver' (expected X.Y.Z)" >&2
+        exit 1
+    fi
+}
+
+validate_clean_tree() {
+    if [[ -n "$(git status --porcelain)" ]]; then
+        echo "Error: working tree is not clean — commit or stash changes first" >&2
+        exit 1
+    fi
+}
+
+validate_on_main() {
+    local branch
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    if [[ "$branch" != "main" ]]; then
+        echo "Warning: you are on branch '$branch', not 'main'"
+        read -r -p "Continue anyway? [y/N] " confirm
+        if [[ "$confirm" != [yY] ]]; then
+            echo "Aborted."
+            exit 1
+        fi
+    fi
+}
+
+main() {
+    local arg="${1:-}"
+
+    if [[ -z "$arg" || "$arg" == "-h" || "$arg" == "--help" ]]; then
+        usage
+    fi
+
+    validate_clean_tree
+    validate_on_main
+
+    local latest_tag new_version
+    latest_tag="$(get_latest_tag)"
+
+    case "$arg" in
+        patch|minor|major)
+            local current_version
+            current_version="$(parse_version "${latest_tag:-v0.0.0}")"
+            new_version="$(bump_version "$current_version" "$arg")"
+            ;;
+        v*)
+            new_version="${arg#v}"
+            validate_version "$new_version"
+            ;;
+        *)
+            echo "Error: unknown argument '$arg'" >&2
+            echo "Run '$SCRIPT_NAME --help' for usage." >&2
+            exit 1
+            ;;
+    esac
+
+    local new_tag="v${new_version}"
+
+    if git rev-parse "$new_tag" >/dev/null 2>&1; then
+        echo "Error: tag '$new_tag' already exists" >&2
+        exit 1
+    fi
+
+    echo "Latest tag:  ${latest_tag:-<none>}"
+    echo "New release: $new_tag"
+    echo
+    read -r -p "Create and push tag '$new_tag'? [y/N] " confirm
+    if [[ "$confirm" != [yY] ]]; then
+        echo "Aborted."
+        exit 1
+    fi
+
+    git tag -a "$new_tag" -m "Release $new_tag"
+    git push origin "$new_tag"
+
+    echo
+    echo "✅ Tag '$new_tag' pushed — release workflow will build binaries automatically."
+    echo "   https://github.com/DuncSmith/pomo/actions"
+}
+
+main "$@"

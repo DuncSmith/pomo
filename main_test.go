@@ -360,3 +360,26 @@ func TestQuitTracksPartialProgress(t *testing.T) {
 		t.Errorf("Expected 20m partial work tracked, got %v", model.totalWorked)
 	}
 }
+
+func TestVersionVariables(t *testing.T) {
+	if version == "" {
+		t.Error("version should have a default value")
+	}
+	if commit == "" {
+		t.Error("commit should have a default value")
+	}
+	if date == "" {
+		t.Error("date should have a default value")
+	}
+
+	// Verify defaults for dev builds
+	if version != "dev" {
+		t.Errorf("Expected default version 'dev', got %q", version)
+	}
+	if commit != "none" {
+		t.Errorf("Expected default commit 'none', got %q", commit)
+	}
+	if date != "unknown" {
+		t.Errorf("Expected default date 'unknown', got %q", date)
+	}
+}

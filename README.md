@@ -17,12 +17,15 @@ Built using Claude Code.
 
 ## Installation
 
-### Prerequisites
-- Go 1.24.5 or later
+### Download a release
+
+Pre-built binaries are available on the [Releases](https://github.com/DuncSmith/pomo/releases) page for Linux, macOS, and Windows (amd64/arm64).
+
+Download the archive for your platform, extract it, and place `pomo` in your `$PATH`.
 
 ### Build from source
 ```bash
-git clone <repository-url>
+git clone https://github.com/DuncSmith/pomo.git
 cd pomo
 go build -o pomo .
 ```
@@ -54,6 +57,7 @@ On exit, a session summary shows intervals completed and total time worked/reste
 ### Help
 ```bash
 ./pomo --help
+./pomo --version
 ```
 
 ## Duration Formats
@@ -91,6 +95,21 @@ go mod download
 # Clean up dependencies
 go mod tidy
 ```
+
+## Releasing
+
+This project uses [GoReleaser](https://goreleaser.com/) with GitHub Actions to produce cross-compiled binaries.
+
+To create a new release, use the helper script:
+
+```bash
+bin/release patch    # bump patch version (v0.1.0 → v0.1.1)
+bin/release minor    # bump minor version (v0.1.0 → v0.2.0)
+bin/release major    # bump major version (v0.1.0 → v1.0.0)
+bin/release v1.2.3   # set explicit version
+```
+
+The script validates your working tree, bumps the version, creates an annotated tag, and pushes it. The release workflow then automatically builds binaries for all platforms, generates a changelog, and creates a GitHub Release with attached artifacts.
 
 ## Technical Details
 

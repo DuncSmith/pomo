@@ -13,6 +13,13 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// Set via -ldflags by GoReleaser
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 type tickMsg time.Time
 type finishedMsg struct{}
 
@@ -192,10 +199,14 @@ func formatDurationHuman(d time.Duration) string {
 func parseArgs() (*Model, error) {
 	args := os.Args[1:]
 
-	// Check for help
+	// Check for help and version flags
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			showHelp()
+			os.Exit(0)
+		}
+		if arg == "-v" || arg == "--version" {
+			fmt.Printf("pomo %s (commit: %s, built: %s)\n", version, commit, date)
 			os.Exit(0)
 		}
 	}
@@ -273,6 +284,7 @@ func showHelp() {
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  -i, --interval  Set interval duration (default: 60m)")
+	fmt.Println("  -v, --version   Show version information")
 	fmt.Println("  -h, --help      Show this help")
 	fmt.Println()
 	fmt.Println("Default: 50m work, 10m rest (60m interval)")
