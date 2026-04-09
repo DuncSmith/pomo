@@ -11,9 +11,9 @@ This is a simple Pomodoro timer CLI application built with Go using the Bubblete
 ### Build and Run
 ```bash
 go build -o pomo .          # Build the executable
-./pomo                      # Run with default 45-minute timer
-./pomo 25m                  # Run 25-minute work timer
-./pomo rest 5m              # Run 5-minute break timer
+./pomo                      # Run with default 50m work / 10m rest interval
+./pomo 25                   # Run 25m work / 35m rest interval
+./pomo 45 --interval 90    # Run 45m work / 45m rest (90m interval)
 ./pomo --help               # Show usage information
 ```
 
@@ -40,10 +40,14 @@ go mod download             # Download dependencies
 ### Key Components
 
 **Model struct**: Central state containing:
-- `duration` and `remaining`: Timer durations
-- `isRest`: Boolean to distinguish work/break timers  
+- `workDuration`, `restDuration`, `intervalDuration`: Interval configuration
+- `remaining`: Time left in current phase
+- `isRest`: Boolean to distinguish work/break phases
 - `paused`: Pause state
+- `intervalsCompleted`: Count of fully completed work+rest cycles
+- `totalWorked`, `totalRested`: Cumulative time tracking for session summary
 - `progress`: Bubbles progress bar component
+- `quitting`: Whether user initiated quit
 
 **Message Types**:
 - `tickMsg`: Timer tick events (every second)
@@ -57,8 +61,10 @@ go mod download             # Download dependencies
 
 ### Command Line Interface
 - Argument parsing in `parseArgs()` supports duration formats: `30`, `30m`, `30s`
+- Supports `--interval` / `-i` flag to override default 60-minute interval
 - Help system with usage examples
-- Work/rest mode detection via `rest` command
+- Validates work > 0, interval > 0, work < interval
+- Rest duration is computed as interval - work
 
 ### Testing Strategy
 - Comprehensive unit tests for utility functions: `parseDuration()`, `formatTime()`, `createProgressBar()`

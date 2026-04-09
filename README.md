@@ -31,18 +31,21 @@ go build -o pomo .
 
 ### Basic Usage
 ```bash
-# Start a 45-minute work session (default)
+# Start with defaults: 50m work, 10m rest (60m interval), repeating
 ./pomo
 
-# Custom work duration
-./pomo 25m          # 25 minutes
-./pomo 30           # 30 minutes (defaults to minutes)
-./pomo 90s          # 90 seconds
+# Custom work duration (rest fills remainder of 60m interval)
+./pomo 25            # 25m work, 35m rest
+./pomo 30m           # 30m work, 30m rest
+./pomo 90s           # 90s work, 58m30s rest
 
-# Break timers
-./pomo rest         # 15-minute break (default)
-./pomo rest 5m      # 5-minute break
+# Custom interval duration
+./pomo 45 --interval 90   # 45m work, 45m rest (90m interval)
+./pomo -i 90              # 50m work, 40m rest (90m interval)
 ```
+
+The timer runs work → rest → work → rest continuously until you quit.
+On exit, a session summary shows intervals completed and total time worked/rested.
 
 ### Keyboard Controls
 - `Space` - Pause/resume timer
