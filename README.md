@@ -23,12 +23,15 @@ Pre-built binaries are available on the [Releases](https://github.com/DuncSmith/
 
 Download the archive for your platform, extract it, and place `pomo` in your `$PATH`.
 
-### Build from source
+### Build and install from source
+
 ```bash
 git clone https://github.com/DuncSmith/pomo.git
 cd pomo
-go build -o pomo .
+bin/build
 ```
+
+`bin/build` compiles `pomo` with the correct version info from the latest git tag and installs it to `~/.local/bin`. Make sure `~/.local/bin` is in your `$PATH`.
 
 ## Usage
 

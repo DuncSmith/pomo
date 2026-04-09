@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# ============================================================================
+# Build a versioned pomo binary and install it to ~/.local/bin
+# ============================================================================
+
+set -euo pipefail
+
+readonly SCRIPT_NAME="$(basename "$0")"
+readonly INSTALL_DIR="${HOME}/.local/bin"
+readonly BINARY="pomo"
+
+usage() {
+    echo "Usage: $SCRIPT_NAME [-h|--help]"
+    echo
+    echo "Builds pomo with version info from the latest git tag and"
+    echo "installs it to ${INSTALL_DIR}."
+    echo
+    echo "Ensure ${INSTALL_DIR} is in your PATH to use the installed binary."
+    exit 0
+}
+
+get_version() {
+    git describe --tags --abbrev=0 2>/dev/null || echo "dev"
+}
+
+get_commit() {
+    git rev-parse --short HEAD 2>/dev/null || echo "none"
+}
+
+get_date() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+main() {
+    local arg="${1:-}"
+    if [[ "$arg" == "-h" || "$arg" == "--help" ]]; then
+        usage
+    fi
+
+    local version commit build_date
+    version="$(get_version)"
+    commit="$(get_commit)"
+    build_date="$(get_date)"
+
+    local ldflags="-s -w \
+        -X main.version=${version} \
+        -X main.commit=${commit} \
+        -X main.date=${build_date}"
+
+    echo "Building pomo ${version} (commit: ${commit})"
+    go build -ldflags "$ldflags" -o "$BINARY" .
+
+    mkdir -p "$INSTALL_DIR"
+    mv "$BINARY" "${INSTALL_DIR}/${BINARY}"
+
+    echo "✅ Installed to ${INSTALL_DIR}/${BINARY}"
+    echo "   $(${INSTALL_DIR}/${BINARY} --version)"
+}
+
+main "$@"
