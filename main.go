@@ -102,9 +102,9 @@ func (m Model) View() string {
 		progressBar := m.progress.ViewAs(progressPercent)
 		
 		if m.paused {
-			s.WriteString(fmt.Sprintf("⏸️  %s %s %.1f%% (PAUSED)\n", timeStr, progressBar, percentage))
+			s.WriteString(fmt.Sprintf("⏸️  %s %s (PAUSED)\n", timeStr, progressBar))
 		} else {
-			s.WriteString(fmt.Sprintf("⏰ %s %s %.1f%%\n", timeStr, progressBar, percentage))
+			s.WriteString(fmt.Sprintf("⏰ %s %s\n", timeStr, progressBar))
 		}
 		s.WriteString("\n")
 		s.WriteString("Press [space] to pause/resume, [q] to quit\n")
