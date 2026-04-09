@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/progress"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/progress"
+	tea "charm.land/bubbletea/v2"
 )
 
 // Set via -ldflags by GoReleaser
@@ -33,7 +33,7 @@ type Model struct {
 	intervalsCompleted int
 	totalWorked        time.Duration
 	totalRested        time.Duration
-	progress           progress.Model
+	progress           *progress.Model
 	quitting           bool
 }
 
@@ -56,7 +56,7 @@ func (m Model) phaseDuration() time.Duration {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
 			// Track time spent in current phase before quitting
@@ -68,20 +68,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.quitting = true
 			return m, tea.Quit
-		case " ":
+		case "space":
 			m.paused = !m.paused
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
 		const padding = 4
 		const maxWidth = 80
-		m.progress.Width = msg.Width - padding - 20
-		if m.progress.Width > maxWidth {
-			m.progress.Width = maxWidth
+		width := msg.Width - padding - 20
+		if width > maxWidth {
+			width = maxWidth
 		}
-		if m.progress.Width < 20 {
-			m.progress.Width = 20
+		if width < 20 {
+			width = 20
 		}
+		m.progress.SetWidth(width)
 		return m, nil
 	case tickMsg:
 		if !m.paused && m.remaining > 0 {
@@ -110,7 +111,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	var s strings.Builder
 
 	emoji := "🍅"
@@ -153,7 +154,7 @@ func (m Model) View() string {
 		s.WriteString("Press [space] to pause/resume, [q] to quit\n")
 	}
 
-	return s.String()
+	return tea.NewView(s.String())
 }
 
 func main() {
@@ -260,13 +261,14 @@ func parseArgs() (*Model, error) {
 
 	restDuration := intervalDuration - workDuration
 
+	p := progress.New(progress.WithDefaultBlend())
 	return &Model{
 		workDuration:     workDuration,
 		restDuration:     restDuration,
 		intervalDuration: intervalDuration,
 		remaining:        workDuration,
 		isRest:           false,
-		progress:         progress.New(progress.WithDefaultGradient()),
+		progress:         &p,
 	}, nil
 }
 

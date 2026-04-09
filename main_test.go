@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestParseDuration(t *testing.T) {
@@ -350,7 +350,7 @@ func TestQuitTracksPartialProgress(t *testing.T) {
 		isRest:           false,
 	}
 
-	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	result, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	model := result.(Model)
 
 	if !model.quitting {
