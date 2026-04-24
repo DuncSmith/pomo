@@ -3,100 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
-	"gopkg.in/yaml.v3"
 )
-
-// Set via -ldflags by GoReleaser
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
-)
-
-// Config holds user preferences loaded from the YAML config file.
-type Config struct {
-	SummaryFolder  string `yaml:"summary_folder"`
-	WorkTime       int    `yaml:"work_time"`
-	IntervalTime   int    `yaml:"interval_time"`
-	ProduceSummary bool   `yaml:"produce_summary"`
-}
-
-// defaultConfig returns the built-in default configuration.
-func defaultConfig() Config {
-	return Config{
-		SummaryFolder:  "~/pomos",
-		WorkTime:       50,
-		IntervalTime:   60,
-		ProduceSummary: true,
-	}
-}
-
-// configPath returns the path to the config file, respecting XDG_CONFIG_HOME.
-func configPath() (string, error) {
-	configHome := os.Getenv("XDG_CONFIG_HOME")
-	if configHome == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("could not determine home directory: %w", err)
-		}
-		configHome = filepath.Join(home, ".config")
-	}
-	return filepath.Join(configHome, "pomo", "config.yaml"), nil
-}
-
-// loadConfig reads the config file, creating it with defaults if it doesn't exist.
-func loadConfig() (Config, error) {
-	path, err := configPath()
-	if err != nil {
-		return defaultConfig(), err
-	}
-
-	data, err := os.ReadFile(path)
-	if os.IsNotExist(err) {
-		// First run: write defaults to disk
-		cfg := defaultConfig()
-		if writeErr := writeDefaultConfig(path, cfg); writeErr != nil {
-			// Non-fatal: warn but continue with defaults
-			fmt.Fprintf(os.Stderr, "Warning: could not create config file: %v\n", writeErr)
-		}
-		return cfg, nil
-	}
-	if err != nil {
-		return defaultConfig(), fmt.Errorf("could not read config file: %w", err)
-	}
-
-	cfg := defaultConfig()
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return defaultConfig(), fmt.Errorf("could not parse config file %s: %w", path, err)
-	}
-	return cfg, nil
-}
-
-// writeDefaultConfig writes a default config file to the given path.
-func writeDefaultConfig(path string, cfg Config) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("could not create config directory: %w", err)
-	}
-	data, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("could not marshal config: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("could not write config file: %w", err)
-	}
-	return nil
-}
 
 type tickMsg time.Time
 type finishedMsg struct{}
@@ -109,24 +22,24 @@ type Task struct {
 }
 
 type Model struct {
-	workDuration       time.Duration
-	restDuration       time.Duration
-	intervalDuration   time.Duration
-	remaining          time.Duration
-	isRest             bool
-	paused             bool
-	intervalsCompleted int
-	totalWorked        time.Duration
-	totalRested        time.Duration
-	progress           *progress.Model
-	quitting           bool
+	workDuration        time.Duration
+	restDuration        time.Duration
+	intervalDuration    time.Duration
+	remaining           time.Duration
+	isRest              bool
+	paused              bool
+	intervalsCompleted  int
+	totalWorked         time.Duration
+	totalRested         time.Duration
+	progress            *progress.Model
+	quitting            bool
 	currentIntervalName string
-	namingMode         bool
-	nameInput          string
-	tasks              []Task
-	taskMode           bool
-	taskInput          string
-	startedAt          time.Time
+	namingMode          bool
+	nameInput           string
+	tasks               []Task
+	taskMode            bool
+	taskInput           string
+	startedAt           time.Time
 }
 
 func tickCmd() tea.Cmd {
@@ -443,6 +356,18 @@ func (m Model) View() tea.View {
 	return tea.NewView(s.String())
 }
 
+func formatTime(d time.Duration) string {
+	minutes := int(d.Minutes())
+	seconds := int(d.Seconds()) % 60
+	return fmt.Sprintf("%02d:%02d", minutes, seconds)
+}
+
+func createProgressBar(percentage float64, width int) string {
+	filled := int(percentage / 100 * float64(width))
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
+	return bar
+}
+
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -477,277 +402,5 @@ func main() {
 		if err := writeSummaryFile(m, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not save summary file: %v\n", err)
 		}
-	}
-}
-
-func printSummary(m Model) {
-	fmt.Println("\n📊 Session Summary")
-	fmt.Printf("  Intervals completed: %d\n", m.intervalsCompleted)
-	fmt.Printf("  Total worked: %s\n", formatDurationHuman(m.totalWorked))
-	fmt.Printf("  Total rested: %s\n", formatDurationHuman(m.totalRested))
-	fmt.Printf("  Interval: %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes())
-
-	// Compute per-task totals from the tasks slice
-	taskTotals := make(map[string]time.Duration)
-	for _, t := range m.tasks {
-		if t.Name == "" {
-			continue
-		}
-		end := t.EndedAt
-		if end.IsZero() {
-			end = time.Now()
-		}
-		taskTotals[t.Name] += end.Sub(t.StartedAt)
-	}
-
-	if len(taskTotals) > 0 {
-		fmt.Println("\n  Tasks:")
-
-		names := make([]string, 0, len(taskTotals))
-		for name := range taskTotals {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
-		for _, name := range names {
-			fmt.Printf("    - %s: %s\n", name, formatDurationHuman(taskTotals[name]))
-		}
-	}
-}
-
-func writeSummaryFile(m Model, cfg Config) error {
-	if !cfg.ProduceSummary {
-		return nil
-	}
-
-	pomosDir := cfg.SummaryFolder
-	// Expand leading ~ to the user's home directory
-	if strings.HasPrefix(pomosDir, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return fmt.Errorf("could not determine home directory: %w", err)
-		}
-		pomosDir = filepath.Join(homeDir, pomosDir[2:])
-	}
-
-	if err := os.MkdirAll(pomosDir, 0755); err != nil {
-		return fmt.Errorf("could not create summary directory: %w", err)
-	}
-
-	filename := m.startedAt.Format("2006-01-02_15-04-05") + ".md"
-	filePath := filepath.Join(pomosDir, filename)
-
-	var sb strings.Builder
-
-	sb.WriteString(fmt.Sprintf("# Pomo Session — %s\n\n", m.startedAt.Format("2006-01-02 15:04:05")))
-	sb.WriteString(fmt.Sprintf("- **Intervals completed:** %d\n", m.intervalsCompleted))
-	sb.WriteString(fmt.Sprintf("- **Total worked:** %s\n", formatDurationHuman(m.totalWorked)))
-	sb.WriteString(fmt.Sprintf("- **Total rested:** %s\n", formatDurationHuman(m.totalRested)))
-	sb.WriteString(fmt.Sprintf("- **Interval:** %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes()))
-
-	// Compute per-task totals
-	taskTotals := make(map[string]time.Duration)
-	for _, t := range m.tasks {
-		if t.Name == "" {
-			continue
-		}
-		end := t.EndedAt
-		if end.IsZero() {
-			end = time.Now()
-		}
-		taskTotals[t.Name] += end.Sub(t.StartedAt)
-	}
-
-	if len(taskTotals) > 0 {
-		sb.WriteString("\n## Tasks\n\n")
-
-		names := make([]string, 0, len(taskTotals))
-		for name := range taskTotals {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
-		for _, name := range names {
-			sb.WriteString(fmt.Sprintf("- **%s:** %s\n", name, formatDurationHuman(taskTotals[name])))
-		}
-	}
-
-	if err := os.WriteFile(filePath, []byte(sb.String()), 0644); err != nil {
-		return fmt.Errorf("could not write summary file: %w", err)
-	}
-
-	fmt.Printf("\n  Summary saved to %s/%s\n", cfg.SummaryFolder, filename)
-	return nil
-}
-
-func formatDurationHuman(d time.Duration) string {
-	h := int(d.Hours())
-	m := int(d.Minutes()) % 60
-	s := int(d.Seconds()) % 60
-	if h > 0 {
-		return fmt.Sprintf("%dh %dm", h, m)
-	}
-	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
-	}
-	return fmt.Sprintf("%ds", s)
-}
-
-// parseArgsResult represents the result of parsing command-line arguments
-type parseArgsResult struct {
-	model       *Model
-	action      string // "", "help", or "version"
-	versionInfo string
-}
-
-func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			return &parseArgsResult{action: "help"}, nil
-		}
-		if arg == "-v" || arg == "--version" {
-			info := fmt.Sprintf("pomo %s (commit: %s, built: %s)", version, commit, date)
-			return &parseArgsResult{action: "version", versionInfo: info}, nil
-		}
-	}
-
-	var workDuration time.Duration
-	var intervalDuration time.Duration
-	var hasWork, hasInterval bool
-
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--interval" || args[i] == "-i" {
-			if i+1 >= len(args) {
-				return nil, fmt.Errorf("--interval requires a value")
-			}
-			d, err := parseDuration(args[i+1])
-			if err != nil {
-				return nil, fmt.Errorf("invalid interval duration: %s", args[i+1])
-			}
-			intervalDuration = d
-			hasInterval = true
-			i++
-		} else {
-			if hasWork {
-				return nil, fmt.Errorf("unexpected argument: %s", args[i])
-			}
-			d, err := parseDuration(args[i])
-			if err != nil {
-				return nil, fmt.Errorf("invalid duration: %s", args[i])
-			}
-			workDuration = d
-			hasWork = true
-		}
-	}
-
-	if !hasWork {
-		workDuration = time.Duration(cfg.WorkTime) * time.Minute
-	}
-	if !hasInterval {
-		intervalDuration = time.Duration(cfg.IntervalTime) * time.Minute
-	}
-
-	if workDuration <= 0 {
-		return nil, fmt.Errorf("work duration must be greater than 0")
-	}
-	if intervalDuration <= 0 {
-		return nil, fmt.Errorf("interval duration must be greater than 0")
-	}
-	if workDuration >= intervalDuration {
-		return nil, fmt.Errorf("work duration (%v) must be less than interval duration (%v)", workDuration, intervalDuration)
-	}
-
-	restDuration := intervalDuration - workDuration
-
-	p := progress.New(progress.WithDefaultBlend())
-	now := time.Now()
-	model := &Model{
-		workDuration:        workDuration,
-		restDuration:        restDuration,
-		intervalDuration:    intervalDuration,
-		remaining:           workDuration,
-		isRest:              false,
-		progress:            &p,
-		currentIntervalName: generateIntervalName(1, now),
-		tasks:               []Task{},
-		namingMode:          false,
-		nameInput:           "",
-		taskMode:            false,
-		taskInput:           "",
-		startedAt:           now,
-	}
-	return &parseArgsResult{model: model}, nil
-}
-
-func showHelp() {
-	fmt.Println("Usage: pomo [duration] [--interval duration]")
-	fmt.Println()
-	fmt.Println("Runs repeating work/rest intervals until you quit.")
-	fmt.Println()
-	fmt.Println("Examples:")
-	fmt.Println("  pomo          # 50m work, 10m rest (60m interval)")
-	fmt.Println("  pomo 25       # 25m work, 35m rest (60m interval)")
-	fmt.Println("  pomo 25m      # 25m work, 35m rest (60m interval)")
-	fmt.Println("  pomo 30s      # 30s work timer (60m interval)")
-	fmt.Println("  pomo 45 -i 90 # 45m work, 45m rest (90m interval)")
-	fmt.Println()
-	fmt.Println("Options:")
-	fmt.Println("  -i, --interval  Set interval duration (default: 60m)")
-	fmt.Println("  -v, --version   Show version information")
-	fmt.Println("  -h, --help      Show this help")
-	fmt.Println()
-	fmt.Println("Default: 50m work, 10m rest (60m interval)")
-}
-
-func formatTime(d time.Duration) string {
-	minutes := int(d.Minutes())
-	seconds := int(d.Seconds()) % 60
-	return fmt.Sprintf("%02d:%02d", minutes, seconds)
-}
-
-func createProgressBar(percentage float64, width int) string {
-	filled := int(percentage / 100 * float64(width))
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-	return bar
-}
-
-func parseDuration(arg string) (time.Duration, error) {
-	var unit = time.Minute
-
-	if strings.HasSuffix(arg, "m") {
-		arg = strings.TrimSuffix(arg, "m")
-		unit = time.Minute
-	} else if strings.HasSuffix(arg, "s") {
-		arg = strings.TrimSuffix(arg, "s")
-		unit = time.Second
-	}
-
-	value, err := strconv.Atoi(arg)
-	if err != nil {
-		return 0, err
-	}
-
-	return time.Duration(value) * unit, nil
-}
-
-func sendNotification(isRest bool, intervalName string) {
-	var title, message string
-	if isRest {
-		title = "☕ Break Timer"
-		message = "Your break is complete!"
-	} else {
-		title = "🍅 Pomodoro Timer"
-		message = fmt.Sprintf("Pomodoro '%s' is complete!", intervalName)
-	}
-
-	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("terminal-notifier", "-title", title, "-message", message, "-sound", "default")
-		err := cmd.Run()
-		if err != nil {
-			fmt.Printf("Debug: terminal-notifier not found. Install it with: brew install terminal-notifier\n")
-		}
-	} else {
-		cmd := exec.Command("notify-send", title, message)
-		cmd.Run()
 	}
 }
