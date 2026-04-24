@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
+	"gopkg.in/yaml.v3"
 )
 
 // Set via -ldflags by GoReleaser
@@ -21,6 +23,80 @@ var (
 	commit  = "none"
 	date    = "unknown"
 )
+
+// Config holds user preferences loaded from the YAML config file.
+type Config struct {
+	SummaryFolder  string `yaml:"summary_folder"`
+	WorkTime       int    `yaml:"work_time"`
+	IntervalTime   int    `yaml:"interval_time"`
+	ProduceSummary bool   `yaml:"produce_summary"`
+}
+
+// defaultConfig returns the built-in default configuration.
+func defaultConfig() Config {
+	return Config{
+		SummaryFolder:  "~/pomos",
+		WorkTime:       50,
+		IntervalTime:   60,
+		ProduceSummary: true,
+	}
+}
+
+// configPath returns the path to the config file, respecting XDG_CONFIG_HOME.
+func configPath() (string, error) {
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("could not determine home directory: %w", err)
+		}
+		configHome = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configHome, "pomo", "config.yaml"), nil
+}
+
+// loadConfig reads the config file, creating it with defaults if it doesn't exist.
+func loadConfig() (Config, error) {
+	path, err := configPath()
+	if err != nil {
+		return defaultConfig(), err
+	}
+
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		// First run: write defaults to disk
+		cfg := defaultConfig()
+		if writeErr := writeDefaultConfig(path, cfg); writeErr != nil {
+			// Non-fatal: warn but continue with defaults
+			fmt.Fprintf(os.Stderr, "Warning: could not create config file: %v\n", writeErr)
+		}
+		return cfg, nil
+	}
+	if err != nil {
+		return defaultConfig(), fmt.Errorf("could not read config file: %w", err)
+	}
+
+	cfg := defaultConfig()
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return defaultConfig(), fmt.Errorf("could not parse config file %s: %w", path, err)
+	}
+	return cfg, nil
+}
+
+// writeDefaultConfig writes a default config file to the given path.
+func writeDefaultConfig(path string, cfg Config) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("could not create config directory: %w", err)
+	}
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("could not marshal config: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		return fmt.Errorf("could not write config file: %w", err)
+	}
+	return nil
+}
 
 type tickMsg time.Time
 type finishedMsg struct{}
@@ -368,7 +444,13 @@ func (m Model) View() tea.View {
 }
 
 func main() {
-	result, err := parseArgs(os.Args[1:])
+	cfg, err := loadConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not load config: %v\n", err)
+		cfg = defaultConfig()
+	}
+
+	result, err := parseArgs(os.Args[1:], cfg)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
@@ -392,7 +474,7 @@ func main() {
 
 	if m, ok := finalModel.(Model); ok && m.quitting {
 		printSummary(m)
-		if err := writeSummaryFile(m); err != nil {
+		if err := writeSummaryFile(m, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not save summary file: %v\n", err)
 		}
 	}
@@ -433,19 +515,27 @@ func printSummary(m Model) {
 	}
 }
 
-func writeSummaryFile(m Model) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("could not determine home directory: %w", err)
+func writeSummaryFile(m Model, cfg Config) error {
+	if !cfg.ProduceSummary {
+		return nil
 	}
 
-	pomosDir := homeDir + "/pomos"
+	pomosDir := cfg.SummaryFolder
+	// Expand leading ~ to the user's home directory
+	if strings.HasPrefix(pomosDir, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("could not determine home directory: %w", err)
+		}
+		pomosDir = filepath.Join(homeDir, pomosDir[2:])
+	}
+
 	if err := os.MkdirAll(pomosDir, 0755); err != nil {
-		return fmt.Errorf("could not create ~/pomos directory: %w", err)
+		return fmt.Errorf("could not create summary directory: %w", err)
 	}
 
 	filename := m.startedAt.Format("2006-01-02_15-04-05") + ".md"
-	filePath := pomosDir + "/" + filename
+	filePath := filepath.Join(pomosDir, filename)
 
 	var sb strings.Builder
 
@@ -486,7 +576,7 @@ func writeSummaryFile(m Model) error {
 		return fmt.Errorf("could not write summary file: %w", err)
 	}
 
-	fmt.Printf("\n  Summary saved to ~/pomos/%s\n", filename)
+	fmt.Printf("\n  Summary saved to %s/%s\n", cfg.SummaryFolder, filename)
 	return nil
 }
 
@@ -510,7 +600,7 @@ type parseArgsResult struct {
 	versionInfo string
 }
 
-func parseArgs(args []string) (*parseArgsResult, error) {
+func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 	for _, arg := range args {
 		if arg == "-h" || arg == "--help" {
 			return &parseArgsResult{action: "help"}, nil
@@ -551,10 +641,10 @@ func parseArgs(args []string) (*parseArgsResult, error) {
 	}
 
 	if !hasWork {
-		workDuration = 50 * time.Minute
+		workDuration = time.Duration(cfg.WorkTime) * time.Minute
 	}
 	if !hasInterval {
-		intervalDuration = 60 * time.Minute
+		intervalDuration = time.Duration(cfg.IntervalTime) * time.Minute
 	}
 
 	if workDuration <= 0 {
