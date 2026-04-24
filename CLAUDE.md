@@ -37,7 +37,7 @@ go mod download              # Download dependencies
 
 ### Core Structure
 - **Multi-file architecture**: Code is organized by concern across files, all in `package main`
-  - `main.go` (~290 lines) — Bubbletea `Model`, `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`, `createProgressBar`
+  - `main.go` (~290 lines) — Bubbletea `Model`, `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`
   - `config.go` (~85 lines) — `Config` type, YAML config loading/writing
   - `cli.go` (~110 lines) — Version vars, `parseArgsResult`, argument parsing, help text
   - `summary.go` (~100 lines) — Session summary output (terminal + Markdown file), `formatDurationHuman`
@@ -143,14 +143,11 @@ Validation: work > 0, interval > 0, work < interval. Rest = interval − work.
 ### Testing Strategy
 
 - ~30 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
-- Covers: `parseDuration`, `formatTime`, `createProgressBar`, `formatDurationHuman`, `parseArgs`, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation
-- **Do not remove `createProgressBar()`** — it is never called at runtime but is required by existing tests
+- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation
 
 ### Progress Bar Implementation
 
-Two implementations coexist:
-1. **`createProgressBar()`** — legacy ASCII (`█`/`░`); used only in tests
-2. **`m.progress.ViewAs(float)`** — Bubbles `progress.Model` with gradient; used at runtime
+Uses `m.progress.ViewAs(float)` — Bubbles `progress.Model` with gradient.
 
 Responsive width: `terminal_width - 4 - 20`, clamped to `[20, 80]`.
 

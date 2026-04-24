@@ -362,12 +362,6 @@ func formatTime(d time.Duration) string {
 	return fmt.Sprintf("%02d:%02d", minutes, seconds)
 }
 
-func createProgressBar(percentage float64, width int) string {
-	filled := int(percentage / 100 * float64(width))
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
-	return bar
-}
-
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {

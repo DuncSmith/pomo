@@ -6,7 +6,7 @@
 go build -o pomo .        # Build
 go test                   # Run all tests
 go test -v                # Verbose tests
-go test -run TestName     # Run a single test (e.g. TestParseDuration, TestFormatTime, TestCreateProgressBar)
+go test -run TestName     # Run a single test (e.g. TestParseDuration, TestFormatTime)
 go mod tidy               # Clean up dependencies
 ```
 
@@ -22,8 +22,7 @@ Single-file Go app (`main.go`) using the [Bubbletea](https://github.com/charmbra
 
 ## Key Conventions
 
-- `createProgressBar()` (ASCII `█`/`░`) is kept alongside the Bubbles progress component solely for test compatibility — do not remove it.
-- The Bubbles `progress.Model` is the one actually rendered; `createProgressBar()` is never called at runtime.
+- Progress bar uses Bubbles `progress.Model` with gradient via `m.progress.ViewAs(float)`.
 - Progress bar width is clamped to 20–80 characters, accounting for the time display and padding (`msg.Width - 4 - 20`).
 - Notifications are fire-and-forget: errors print a debug hint but never crash the app.
 - Default durations: **50 min** work, **10 min** rest (60-minute interval).
