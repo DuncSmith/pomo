@@ -78,6 +78,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.nameInput) > 0 {
 					m.nameInput = m.nameInput[:len(m.nameInput)-1]
 				}
+			case "space":
+				m.nameInput += " "
 			default:
 				m.nameInput += msg.String()
 			}
