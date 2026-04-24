@@ -288,8 +288,7 @@ func TestPhaseTransitionWorkToRest(t *testing.T) {
 		intervalDuration: 60 * time.Minute,
 		remaining:        0,
 		isRest:           false,
-		intervalNames:       make(map[int]string),
-		workedDurationsByName: make(map[string]time.Duration),
+		tasks:            []Task{},
 	}
 
 	result, cmd := m.Update(finishedMsg{})
@@ -321,8 +320,7 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 		isRest:             true,
 		intervalsCompleted: 0,
 		totalWorked:        50 * time.Minute,
-		intervalNames:       make(map[int]string),
-		workedDurationsByName: make(map[string]time.Duration),
+		tasks:              []Task{},
 	}
 
 	result, cmd := m.Update(finishedMsg{})
@@ -347,12 +345,12 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 
 func TestQuitTracksPartialProgress(t *testing.T) {
 	m := Model{
-		workDuration:          50 * time.Minute,
-		restDuration:          10 * time.Minute,
-		intervalDuration:      60 * time.Minute,
-		remaining:             30 * time.Minute,
-		isRest:                false,
-		workedDurationsByName: make(map[string]time.Duration),
+		workDuration:     50 * time.Minute,
+		restDuration:     10 * time.Minute,
+		intervalDuration: 60 * time.Minute,
+		remaining:        30 * time.Minute,
+		isRest:           false,
+		tasks:            []Task{},
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
@@ -363,13 +361,6 @@ func TestQuitTracksPartialProgress(t *testing.T) {
 	}
 	if model.totalWorked != 20*time.Minute {
 		t.Errorf("Expected 20m partial work tracked, got %v", model.totalWorked)
-	}
-	// Verify the partial work was also tracked by name
-	expectedName := "Interval #1"
-	if duration, exists := model.workedDurationsByName[expectedName]; !exists {
-		t.Errorf("Expected %q to exist in workedDurationsByName", expectedName)
-	} else if duration != 20*time.Minute {
-		t.Errorf("Expected %q duration to be 20m, got %v", expectedName, duration)
 	}
 }
 
@@ -384,7 +375,6 @@ func TestVersionVariables(t *testing.T) {
 		t.Error("date should have a default value")
 	}
 
-	// Verify defaults for dev builds
 	if version != "dev" {
 		t.Errorf("Expected default version 'dev', got %q", version)
 	}
@@ -398,13 +388,13 @@ func TestVersionVariables(t *testing.T) {
 
 func TestParseArgs(t *testing.T) {
 	tests := []struct {
-		name          string
-		args          []string
-		expectError   bool
-		expectAction  string
-		workDuration  time.Duration
-		restDuration  time.Duration
-		intervalDur   time.Duration
+		name         string
+		args         []string
+		expectError  bool
+		expectAction string
+		workDuration time.Duration
+		restDuration time.Duration
+		intervalDur  time.Duration
 	}{
 		{
 			name:         "defaults (no args)",
@@ -543,7 +533,6 @@ func TestParseArgs(t *testing.T) {
 				return
 			}
 
-			// Verify model fields
 			if result.model == nil {
 				t.Fatal("Expected model to be populated")
 			}
@@ -567,5 +556,302 @@ func TestParseArgs(t *testing.T) {
 				t.Errorf("Expected intervalsCompleted to be 0, got %d", m.intervalsCompleted)
 			}
 		})
+	}
+}
+
+func TestGenerateIntervalName(t *testing.T) {
+	tests := []struct {
+		name     string
+		n        int
+		hour     int
+		expected string
+	}{
+		{name: "morning first", n: 1, hour: 8, expected: "Morning #1"},
+		{name: "morning boundary start", n: 2, hour: 0, expected: "Morning #2"},
+		{name: "morning boundary end", n: 3, hour: 11, expected: "Morning #3"},
+		{name: "afternoon first", n: 1, hour: 12, expected: "Afternoon #1"},
+		{name: "afternoon mid", n: 4, hour: 14, expected: "Afternoon #4"},
+		{name: "afternoon boundary end", n: 2, hour: 16, expected: "Afternoon #2"},
+		{name: "evening start", n: 1, hour: 17, expected: "Evening #1"},
+		{name: "evening mid", n: 3, hour: 19, expected: "Evening #3"},
+		{name: "evening boundary end", n: 2, hour: 20, expected: "Evening #2"},
+		{name: "night start", n: 1, hour: 21, expected: "Night #1"},
+		{name: "night late", n: 5, hour: 23, expected: "Night #5"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			now := time.Date(2026, 1, 1, tt.hour, 0, 0, 0, time.UTC)
+			result := generateIntervalName(tt.n, now)
+			if result != tt.expected {
+				t.Errorf("generateIntervalName(%d, hour=%d): expected %q, got %q", tt.n, tt.hour, tt.expected, result)
+			}
+		})
+	}
+}
+
+func TestStartTask(t *testing.T) {
+	now := time.Now()
+	m := Model{tasks: []Task{}}
+
+	m.startTask("Write tests", now)
+
+	if len(m.tasks) != 1 {
+		t.Fatalf("Expected 1 task, got %d", len(m.tasks))
+	}
+	if m.tasks[0].Name != "Write tests" {
+		t.Errorf("Expected task name 'Write tests', got %q", m.tasks[0].Name)
+	}
+	if !m.tasks[0].StartedAt.Equal(now) {
+		t.Errorf("Expected StartedAt %v, got %v", now, m.tasks[0].StartedAt)
+	}
+	if !m.tasks[0].EndedAt.IsZero() {
+		t.Errorf("Expected EndedAt to be zero for active task")
+	}
+}
+
+func TestStartTaskEndsExistingTask(t *testing.T) {
+	start := time.Now()
+	m := Model{tasks: []Task{}}
+	m.startTask("First task", start)
+
+	later := start.Add(10 * time.Minute)
+	m.startTask("Second task", later)
+
+	if len(m.tasks) != 2 {
+		t.Fatalf("Expected 2 tasks, got %d", len(m.tasks))
+	}
+	// First task should be ended
+	if m.tasks[0].EndedAt.IsZero() {
+		t.Error("Expected first task to be ended")
+	}
+	if !m.tasks[0].EndedAt.Equal(later) {
+		t.Errorf("Expected first task EndedAt %v, got %v", later, m.tasks[0].EndedAt)
+	}
+	// Second task should be active
+	if !m.tasks[1].EndedAt.IsZero() {
+		t.Error("Expected second task to still be active")
+	}
+}
+
+func TestActiveTask(t *testing.T) {
+	m := Model{tasks: []Task{}}
+
+	// No tasks: no active task
+	if m.activeTask() != nil {
+		t.Error("Expected nil active task when no tasks")
+	}
+
+	now := time.Now()
+	m.startTask("My task", now)
+
+	active := m.activeTask()
+	if active == nil {
+		t.Fatal("Expected active task, got nil")
+	}
+	if active.Name != "My task" {
+		t.Errorf("Expected active task name 'My task', got %q", active.Name)
+	}
+
+	// End the task
+	m.endActiveTask(now.Add(5 * time.Minute))
+	if m.activeTask() != nil {
+		t.Error("Expected no active task after ending it")
+	}
+}
+
+func TestTransitionToRestEndsActiveTask(t *testing.T) {
+	start := time.Now()
+	m := Model{
+		workDuration: 50 * time.Minute,
+		restDuration: 10 * time.Minute,
+		tasks:        []Task{},
+	}
+	m.startTask("Active task", start)
+
+	m = m.transitionToRest(50 * time.Minute)
+
+	if m.activeTask() != nil {
+		t.Error("Expected no active task after transitioning to rest")
+	}
+	if m.tasks[0].EndedAt.IsZero() {
+		t.Error("Expected task EndedAt to be set after transitioning to rest")
+	}
+}
+
+func TestTransitionToWorkContinuesLastTask(t *testing.T) {
+	start := time.Now()
+	m := Model{
+		workDuration:       50 * time.Minute,
+		restDuration:       10 * time.Minute,
+		intervalsCompleted: 0,
+		isRest:             true,
+		tasks:              []Task{},
+	}
+	// Simulate a task that was ended when rest began
+	m.tasks = append(m.tasks, Task{
+		Name:      "Carry forward task",
+		StartedAt: start,
+		EndedAt:   start.Add(50 * time.Minute),
+	})
+
+	m = m.transitionToWork()
+
+	// Should have created a new task entry continuing the last task name
+	if len(m.tasks) != 2 {
+		t.Fatalf("Expected 2 task entries, got %d", len(m.tasks))
+	}
+	if m.tasks[1].Name != "Carry forward task" {
+		t.Errorf("Expected continued task name 'Carry forward task', got %q", m.tasks[1].Name)
+	}
+	if !m.tasks[1].EndedAt.IsZero() {
+		t.Error("Expected continued task to be active (no EndedAt)")
+	}
+}
+
+func TestTransitionToWorkNoTasksNoContinuation(t *testing.T) {
+	m := Model{
+		workDuration:       50 * time.Minute,
+		restDuration:       10 * time.Minute,
+		intervalsCompleted: 0,
+		isRest:             true,
+		tasks:              []Task{},
+	}
+
+	m = m.transitionToWork()
+
+	// No tasks to continue
+	if len(m.tasks) != 0 {
+		t.Errorf("Expected 0 tasks when no previous task, got %d", len(m.tasks))
+	}
+}
+
+func TestTransitionToWorkGeneratesNewIntervalName(t *testing.T) {
+	m := Model{
+		workDuration:        50 * time.Minute,
+		restDuration:        10 * time.Minute,
+		intervalsCompleted:  0,
+		isRest:              true,
+		currentIntervalName: "My Custom Name",
+		tasks:               []Task{},
+	}
+
+	m = m.transitionToWork()
+
+	// Name should be auto-generated, not the old custom name
+	if m.currentIntervalName == "My Custom Name" {
+		t.Error("Expected interval name to be reset on new work phase, not carry over the custom name")
+	}
+	if m.currentIntervalName == "" {
+		t.Error("Expected interval name to be set to an auto-generated value")
+	}
+}
+
+func TestTaskKeyOpensTaskMode(t *testing.T) {
+	m := Model{
+		workDuration: 50 * time.Minute,
+		restDuration: 10 * time.Minute,
+		remaining:    40 * time.Minute,
+		isRest:       false,
+		tasks:        []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	model := result.(Model)
+
+	if !model.taskMode {
+		t.Error("Expected taskMode to be true after pressing 'a'")
+	}
+}
+
+func TestTaskKeyDisabledDuringRest(t *testing.T) {
+	m := Model{
+		workDuration: 50 * time.Minute,
+		restDuration: 10 * time.Minute,
+		remaining:    8 * time.Minute,
+		isRest:       true,
+		tasks:        []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to remain false during rest phase")
+	}
+}
+
+func TestTaskInputConfirm(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		taskMode:  true,
+		taskInput: "Fix bug",
+		tasks:     []Task{},
+	}
+	// Simulate a prior active task to confirm it gets ended
+	m.tasks = append(m.tasks, Task{Name: "Old task", StartedAt: now.Add(-10 * time.Minute)})
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to be false after confirming")
+	}
+	if model.taskInput != "" {
+		t.Error("Expected taskInput to be cleared after confirming")
+	}
+	// Should have ended old task and created new one
+	if len(model.tasks) != 2 {
+		t.Fatalf("Expected 2 tasks, got %d", len(model.tasks))
+	}
+	if model.tasks[0].EndedAt.IsZero() {
+		t.Error("Expected old task to be ended")
+	}
+	if model.tasks[1].Name != "Fix bug" {
+		t.Errorf("Expected new task name 'Fix bug', got %q", model.tasks[1].Name)
+	}
+}
+
+func TestTaskInputCancel(t *testing.T) {
+	m := Model{
+		taskMode:  true,
+		taskInput: "Work in progress",
+		tasks:     []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to be false after pressing esc")
+	}
+	if len(model.tasks) != 0 {
+		t.Error("Expected no tasks to be created on cancel")
+	}
+}
+
+func TestTaskSummaryMergesDuplicates(t *testing.T) {
+	t1 := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	tasks := []Task{
+		{Name: "Feature A", StartedAt: t1, EndedAt: t1.Add(30 * time.Minute)},
+		{Name: "Feature B", StartedAt: t1.Add(30 * time.Minute), EndedAt: t1.Add(50 * time.Minute)},
+		{Name: "Feature A", StartedAt: t1.Add(50 * time.Minute), EndedAt: t1.Add(80 * time.Minute)},
+	}
+
+	// Compute totals the same way printSummary does
+	taskTotals := make(map[string]time.Duration)
+	for _, task := range tasks {
+		end := task.EndedAt
+		if end.IsZero() {
+			end = time.Now()
+		}
+		taskTotals[task.Name] += end.Sub(task.StartedAt)
+	}
+
+	if taskTotals["Feature A"] != 60*time.Minute {
+		t.Errorf("Expected Feature A total 60m, got %v", taskTotals["Feature A"])
+	}
+	if taskTotals["Feature B"] != 20*time.Minute {
+		t.Errorf("Expected Feature B total 20m, got %v", taskTotals["Feature B"])
 	}
 }
