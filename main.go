@@ -107,6 +107,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.nameInput = m.currentIntervalName // Pre-fill with current name
 			}
 			return m, nil
+		case "s":
+			// Skip current interval
+			if m.isRest {
+				// Track time spent in current rest phase before skipping
+				elapsed := m.phaseDuration() - m.remaining
+				m.totalRested += elapsed
+				
+				// Transition to work phase
+				m.intervalsCompleted++
+				m.isRest = false
+				m.remaining = m.workDuration
+				
+				// Inherit the last custom name for the new work interval
+				m.currentIntervalName = m.lastCustomName
+				
+				// Send notification
+				m.sendNotification()
+				
+				return m, tickCmd()
+			} else {
+				// Track time spent in current work phase before skipping
+				elapsed := m.phaseDuration() - m.remaining
+				m.totalWorked += elapsed
+				
+				// Determine the name for the completed interval
+				nameToStore := m.currentIntervalName
+				if nameToStore == "" {
+					nameToStore = fmt.Sprintf("Interval #%d", m.intervalsCompleted+1)
+				}
+				m.intervalNames[m.intervalsCompleted+1] = nameToStore
+				m.workedDurationsByName[nameToStore] += elapsed
+				
+				// Transition to rest phase
+				m.isRest = true
+				m.remaining = m.restDuration
+				
+				// Store current custom name as last custom name for inheritance
+				if m.currentIntervalName != "" {
+					m.lastCustomName = m.currentIntervalName
+				}
+				
+				// Send notification
+				m.sendNotification()
+				
+				return m, tickCmd()
+			}
 		}
 	case tea.WindowSizeMsg:
 		const padding = 4
@@ -217,7 +263,11 @@ func (m Model) View() tea.View {
 			s.WriteString(fmt.Sprintf("⏰ %s %s\n", timeStr, progressBar))
 		}
 		s.WriteString("\n")
-		s.WriteString("Press [space] to pause/resume, [q] to quit\n")
+		if m.isRest {
+			s.WriteString("Press [space] to pause/resume, [s] to skip, [q] to quit\n")
+		} else {
+			s.WriteString("Press [space] to pause/resume, [n] to name, [s] to skip, [q] to quit\n")
+		}
 	}
 
 	return tea.NewView(s.String())
