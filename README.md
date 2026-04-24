@@ -51,11 +51,33 @@ bin/build
 ```
 
 The timer runs work → rest → work → rest continuously until you quit.
-On exit, a session summary shows intervals completed and total time worked/rested.
+On exit, a session summary shows:
+- Intervals completed
+- Total time worked and rested  
+- Breakdown of work time by interval name (if intervals were named)
 
 ### Keyboard Controls
 - `Space` - Pause/resume timer
 - `q` or `Ctrl+C` - Quit application
+- `n` - Name current work interval (press again to rename)
+- `s` - Skip current phase (work → rest or rest → work)
+
+### Interval Naming
+During work phases, press `n` to give a name to your current interval. This name will be:
+- Saved in your session summary
+- Inherited by subsequent intervals (so you don't need to rename every time)
+- Shown in the session summary with tracked time per name
+
+Example usage:
+```bash
+# Start a timer
+./pomo 25
+
+# During work phase, press 'n' and type "Email cleanup"
+# The interval will be named "Email cleanup"
+# After break, next work interval will inherit "Email cleanup"
+# Press 'n' again to rename if needed
+```
 
 ### Help
 ```bash
