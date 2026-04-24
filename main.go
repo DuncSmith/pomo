@@ -50,6 +50,7 @@ type Model struct {
 	tasks              []Task
 	taskMode           bool
 	taskInput          string
+	startedAt          time.Time
 }
 
 func tickCmd() tea.Cmd {
@@ -391,6 +392,9 @@ func main() {
 
 	if m, ok := finalModel.(Model); ok && m.quitting {
 		printSummary(m)
+		if err := writeSummaryFile(m); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not save summary file: %v\n", err)
+		}
 	}
 }
 
@@ -427,6 +431,63 @@ func printSummary(m Model) {
 			fmt.Printf("    - %s: %s\n", name, formatDurationHuman(taskTotals[name]))
 		}
 	}
+}
+
+func writeSummaryFile(m Model) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("could not determine home directory: %w", err)
+	}
+
+	pomosDir := homeDir + "/pomos"
+	if err := os.MkdirAll(pomosDir, 0755); err != nil {
+		return fmt.Errorf("could not create ~/pomos directory: %w", err)
+	}
+
+	filename := m.startedAt.Format("2006-01-02_15-04-05") + ".md"
+	filePath := pomosDir + "/" + filename
+
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("# Pomo Session — %s\n\n", m.startedAt.Format("2006-01-02 15:04:05")))
+	sb.WriteString(fmt.Sprintf("- **Intervals completed:** %d\n", m.intervalsCompleted))
+	sb.WriteString(fmt.Sprintf("- **Total worked:** %s\n", formatDurationHuman(m.totalWorked)))
+	sb.WriteString(fmt.Sprintf("- **Total rested:** %s\n", formatDurationHuman(m.totalRested)))
+	sb.WriteString(fmt.Sprintf("- **Interval:** %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes()))
+
+	// Compute per-task totals
+	taskTotals := make(map[string]time.Duration)
+	for _, t := range m.tasks {
+		if t.Name == "" {
+			continue
+		}
+		end := t.EndedAt
+		if end.IsZero() {
+			end = time.Now()
+		}
+		taskTotals[t.Name] += end.Sub(t.StartedAt)
+	}
+
+	if len(taskTotals) > 0 {
+		sb.WriteString("\n## Tasks\n\n")
+
+		names := make([]string, 0, len(taskTotals))
+		for name := range taskTotals {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		for _, name := range names {
+			sb.WriteString(fmt.Sprintf("- **%s:** %s\n", name, formatDurationHuman(taskTotals[name])))
+		}
+	}
+
+	if err := os.WriteFile(filePath, []byte(sb.String()), 0644); err != nil {
+		return fmt.Errorf("could not write summary file: %w", err)
+	}
+
+	fmt.Printf("\n  Summary saved to ~/pomos/%s\n", filename)
+	return nil
 }
 
 func formatDurationHuman(d time.Duration) string {
@@ -509,6 +570,7 @@ func parseArgs(args []string) (*parseArgsResult, error) {
 	restDuration := intervalDuration - workDuration
 
 	p := progress.New(progress.WithDefaultBlend())
+	now := time.Now()
 	model := &Model{
 		workDuration:        workDuration,
 		restDuration:        restDuration,
@@ -516,12 +578,13 @@ func parseArgs(args []string) (*parseArgsResult, error) {
 		remaining:           workDuration,
 		isRest:              false,
 		progress:            &p,
-		currentIntervalName: generateIntervalName(1, time.Now()),
+		currentIntervalName: generateIntervalName(1, now),
 		tasks:               []Task{},
 		namingMode:          false,
 		nameInput:           "",
 		taskMode:            false,
 		taskInput:           "",
+		startedAt:           now,
 	}
 	return &parseArgsResult{model: model}, nil
 }
