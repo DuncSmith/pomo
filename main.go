@@ -33,8 +33,14 @@ type Model struct {
 	intervalsCompleted int
 	totalWorked        time.Duration
 	totalRested        time.Duration
-	progress           *progress.Model
-	quitting           bool
+	progress            *progress.Model
+	quitting            bool
+	currentIntervalName string
+	lastCustomName      string
+	intervalNames       map[int]string
+	workedDurationsByName map[string]time.Duration
+	namingMode          bool
+	nameInput           string
 }
 
 func tickCmd() tea.Cmd {
@@ -54,7 +60,31 @@ func (m Model) phaseDuration() time.Duration {
 	return m.workDuration
 }
 
+type renameInputMsg string
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.namingMode {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			switch msg.String() {
+			case "enter":
+				m.currentIntervalName = m.nameInput
+				m.namingMode = false
+				m.nameInput = ""
+			case "esc":
+				m.namingMode = false
+				m.nameInput = ""
+			case "backspace":
+				if len(m.nameInput) > 0 {
+					m.nameInput = m.nameInput[:len(m.nameInput)-1]
+				}
+			default:
+				m.nameInput += msg.String()
+			}
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -70,6 +100,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "space":
 			m.paused = !m.paused
+			return m, nil
+		case "n":
+			if !m.isRest {
+				m.namingMode = true
+				m.nameInput = m.currentIntervalName // Pre-fill with current name
+			}
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
@@ -95,39 +131,69 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case finishedMsg:
 		m.sendNotification()
 		if m.isRest {
-			// Rest finished: complete the interval, start new work phase
-			m.totalRested += m.restDuration
-			m.intervalsCompleted++
-			m.isRest = false
-			m.remaining = m.workDuration
-		} else {
-			// Work finished: switch to rest phase
-			m.totalWorked += m.workDuration
-			m.isRest = true
-			m.remaining = m.restDuration
-		}
-		return m, tickCmd()
-	}
-	return m, nil
+            // Rest finished: complete the interval, start new work phase
+            m.totalRested += m.restDuration
+            m.intervalsCompleted++
+            m.isRest = false
+            m.remaining = m.workDuration
+
+            // Inherit the last custom name for the new work interval
+            m.currentIntervalName = m.lastCustomName
+
+        } else {
+            // Work finished: switch to rest phase
+
+            // Determine the name to store for the completed interval
+            nameToStore := m.currentIntervalName
+            if nameToStore == "" {
+                nameToStore = fmt.Sprintf("Interval #%d", m.intervalsCompleted+1)
+            }
+            m.intervalNames[m.intervalsCompleted+1] = nameToStore
+            m.workedDurationsByName[nameToStore] += m.workDuration
+
+            m.totalWorked += m.workDuration
+            m.isRest = true
+            m.remaining = m.restDuration
+
+            // Store current custom name as last custom name for inheritance
+            if m.currentIntervalName != "" {
+                m.lastCustomName = m.currentIntervalName
+            }
+        }
+        return m, tickCmd()
+    }
+    return m, nil
 }
 
 func (m Model) View() tea.View {
 	var s strings.Builder
 
+	if m.namingMode {
+		s.WriteString(fmt.Sprintf("Enter name: %s\n", m.nameInput))
+		return tea.NewView(s.String())
+	}
+
 	emoji := "🍅"
 	title := "Pomodoro Timer"
+	currentName := m.currentIntervalName
+
 	if m.isRest {
 		emoji = "☕"
 		title = "Break Timer"
+		currentName = ""
 	}
 
 	phaseDur := m.phaseDuration()
 	intervalNum := m.intervalsCompleted + 1
 
+	if currentName == "" {
+		currentName = fmt.Sprintf("Interval #%d", intervalNum)
+	}
+
 	if phaseDur < time.Minute {
-		s.WriteString(fmt.Sprintf("%s %s: %d seconds (interval #%d)\n", emoji, title, int(phaseDur.Seconds()), intervalNum))
+		s.WriteString(fmt.Sprintf("%s %s: %s (%d seconds)\n", emoji, title, currentName, int(phaseDur.Seconds())))
 	} else {
-		s.WriteString(fmt.Sprintf("%s %s: %.0fm (interval #%d)\n", emoji, title, phaseDur.Minutes(), intervalNum))
+		s.WriteString(fmt.Sprintf("%s %s: %s (%.0fm)\n", emoji, title, currentName, phaseDur.Minutes()))
 	}
 	s.WriteString("\n")
 
@@ -182,6 +248,13 @@ func printSummary(m Model) {
 	fmt.Printf("  Total worked: %s\n", formatDurationHuman(m.totalWorked))
 	fmt.Printf("  Total rested: %s\n", formatDurationHuman(m.totalRested))
 	fmt.Printf("  Interval: %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes())
+
+	if len(m.workedDurationsByName) > 0 {
+		fmt.Println("\n  Worked Durations by Name:")
+		for name, duration := range m.workedDurationsByName {
+			fmt.Printf("    - %s: %s\n", name, formatDurationHuman(duration))
+		}
+	}
 }
 
 func formatDurationHuman(d time.Duration) string {
@@ -263,12 +336,18 @@ func parseArgs() (*Model, error) {
 
 	p := progress.New(progress.WithDefaultBlend())
 	return &Model{
-		workDuration:     workDuration,
-		restDuration:     restDuration,
-		intervalDuration: intervalDuration,
-		remaining:        workDuration,
-		isRest:           false,
-		progress:         &p,
+		workDuration:        workDuration,
+		restDuration:        restDuration,
+		intervalDuration:    intervalDuration,
+		remaining:           workDuration,
+		isRest:              false,
+		progress:            &p,
+		currentIntervalName: "",
+		lastCustomName:      "",
+		intervalNames:       make(map[int]string),
+		workedDurationsByName: make(map[string]time.Duration),
+		namingMode:          false,
+		nameInput:           "",
 	}, nil
 }
 
@@ -331,7 +410,11 @@ func (m Model) sendNotification() {
 		message = "Your break is complete!"
 	} else {
 		title = "🍅 Pomodoro Timer"
-		message = "Your Pomodoro session is complete!"
+		intervalName := m.currentIntervalName
+		if intervalName == "" {
+			intervalName = fmt.Sprintf("Interval #%d", m.intervalsCompleted+1)
+		}
+		message = fmt.Sprintf("Pomodoro '%s' is complete!", intervalName)
 	}
 	
 	if runtime.GOOS == "darwin" {

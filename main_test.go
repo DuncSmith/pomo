@@ -288,6 +288,8 @@ func TestPhaseTransitionWorkToRest(t *testing.T) {
 		intervalDuration: 60 * time.Minute,
 		remaining:        0,
 		isRest:           false,
+		intervalNames:       make(map[int]string),
+		workedDurationsByName: make(map[string]time.Duration),
 	}
 
 	result, cmd := m.Update(finishedMsg{})
@@ -319,6 +321,8 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 		isRest:             true,
 		intervalsCompleted: 0,
 		totalWorked:        50 * time.Minute,
+		intervalNames:       make(map[int]string),
+		workedDurationsByName: make(map[string]time.Duration),
 	}
 
 	result, cmd := m.Update(finishedMsg{})
