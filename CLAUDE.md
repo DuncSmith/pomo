@@ -4,78 +4,160 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a simple Pomodoro timer CLI application built with Go using the Bubbletea TUI framework. The application provides an interactive terminal-based timer with visual progress bars, pause/resume functionality, and system notifications.
+A Pomodoro timer CLI application built with Go using the Bubbletea TUI framework. Features a terminal UI with visual progress bars, pause/resume, interval naming, task tracking, session summaries (terminal + Markdown file), and system notifications.
 
 ## Common Commands
 
 ### Build and Run
 ```bash
-go build -o pomo .          # Build the executable
-./pomo                      # Run with default 50m work / 10m rest interval
-./pomo 25                   # Run 25m work / 35m rest interval
-./pomo 45 --interval 90    # Run 45m work / 45m rest (90m interval)
-./pomo --help               # Show usage information
+go build -o pomo .           # Build the executable
+./pomo                       # Run with default 50m work / 10m rest (60m interval)
+./pomo 25                    # Run 25m work / 35m rest (60m interval)
+./pomo 45 --interval 90     # Run 45m work / 45m rest (90m interval)
+./pomo --help                # Show usage information
+./pomo --version             # Show version, commit, build date
+bin/build                    # Build versioned binary and install to ~/.local/bin
+bin/release                  # Bump version and push a semver git tag
 ```
 
 ### Testing
 ```bash
-go test                     # Run all tests
-go test -v                  # Run tests with verbose output
-go test -run TestName       # Run a specific test
+go test                      # Run all tests
+go test -v                   # Run tests with verbose output
+go test -run TestName        # Run a specific test
 ```
 
 ### Dependencies
 ```bash
-go mod tidy                 # Clean up dependencies
-go mod download             # Download dependencies
+go mod tidy                  # Clean up dependencies
+go mod download              # Download dependencies
 ```
 
 ## Architecture
 
 ### Core Structure
-- **Single-file architecture**: All code is in `main.go` with a focused, minimal design
-- **Bubbletea TUI Framework**: Uses the Elm Architecture pattern (Model-Update-View)
-- **Bubbles Components**: Uses the official progress bar component for visual feedback
+- **Single-file architecture**: All application code lives in `main.go` (~750 lines)
+- **Bubbletea TUI Framework**: Elm Architecture pattern (Model / Update / View)
+- **Bubbles Components**: Official `progress.Model` component for the gradient progress bar
 
-### Key Components
+### Types
 
-**Model struct**: Central state containing:
-- `workDuration`, `restDuration`, `intervalDuration`: Interval configuration
+**`Config`** — User preferences loaded from `~/.config/pomo/config.yaml` (XDG-compliant):
+- `SummaryFolder` (default `"~/pomos"`): Where to write Markdown session summaries
+- `WorkTime` (default `50`): Default work phase minutes
+- `IntervalTime` (default `60`): Default total interval minutes
+- `ProduceSummary` (default `true`): Whether to write a Markdown summary file on quit
+
+**`Model`** — Central Bubbletea state:
+- `workDuration`, `restDuration`, `intervalDuration`: Phase configuration
 - `remaining`: Time left in current phase
-- `isRest`: Boolean to distinguish work/break phases
+- `isRest`: Distinguishes work vs. break phase
 - `paused`: Pause state
 - `intervalsCompleted`: Count of fully completed work+rest cycles
-- `totalWorked`, `totalRested`: Cumulative time tracking for session summary
-- `progress`: Bubbles progress bar component
-- `quitting`: Whether user initiated quit
+- `totalWorked`, `totalRested`: Cumulative time for session summary
+- `progress`: Bubbles progress bar component (pointer)
+- `quitting`: Set on user quit; triggers summary output in `main()`
+- `currentIntervalName`: Display name for the current work interval (e.g. `"Morning #1"`)
+- `namingMode` / `nameInput`: State for the inline interval rename prompt
+- `taskMode` / `taskInput`: State for the inline task name input prompt
+- `tasks []Task`: Append-only log of all task records for the session
+- `startedAt`: Session start timestamp (used to name the summary file)
+
+**`Task`** — Named unit of work:
+- `Name string`: User-provided task name
+- `StartedAt time.Time`: When this task entry began
+- `EndedAt time.Time`: When it ended; zero value means currently active
 
 **Message Types**:
-- `tickMsg`: Timer tick events (every second)
-- `finishedMsg`: Timer completion events
-- Built-in `tea.KeyMsg` and `tea.WindowSizeMsg` for input/resize handling
+- `tickMsg`: 1-second timer tick (drives the countdown)
+- `finishedMsg`: Emitted when `remaining` hits 0 (triggers phase transition + notification)
+- Built-in `tea.KeyPressMsg` and `tea.WindowSizeMsg`
 
-**Core Functions**:
-- `Init()`: Starts the timer ticker
-- `Update()`: Handles all events (keyboard, timer ticks, window resize)
-- `View()`: Renders the TUI with progress bar and time display
+### Key Functions
+
+**Bubbletea lifecycle**:
+- `Init()`: Returns `tickCmd()` to start the 1-second tick loop
+- `Update()`: Dispatches on message type; delegates to `handleNamingInput()` / `handleTaskInput()` when those modes are active
+- `View()`: Renders naming/task prompts, or the main timer UI (header, interval name, countdown, progress bar, active task, key hints)
+
+**Phase transitions**:
+- `transitionToRest(elapsed)`: Accumulates work time, sets `isRest=true`, ends active task
+- `transitionToWork()`: Accumulates rest time, increments counter, generates new interval name, continues last task name into a new Task entry
+- `generateIntervalName(n, now)`: Produces `"Morning #N"` / `"Afternoon #N"` / `"Evening #N"` / `"Night #N"` based on time of day
+
+**Task tracking** (pointer receivers, mutate in place):
+- `activeTask()`: Returns pointer to the last task with a zero `EndedAt`, or nil
+- `endActiveTask(at)`: Stamps `EndedAt` on the currently active task
+- `startTask(name, at)`: Ends any active task, appends a new Task entry
+
+**Input modes**:
+- `handleNamingInput()`: Enter/Esc to commit/cancel; Backspace/Delete are UTF-8 rune-aware
+- `handleTaskInput()`: Same logic; on Enter calls `startTask()` if input is non-empty
+
+**CLI**:
+- `parseArgs(args, cfg)`: Parses positional work duration + `--interval`/`-i` flag; falls back to config values; validates constraints; handles `--help`/`-h` and `--version`/`-v`
+- `parseDuration(arg)`: Accepts `"30"`, `"30m"`, `"30s"`; bare integer = minutes
+- `showHelp()`: Prints usage, examples, and options
+
+**Output**:
+- `printSummary(m)`: Prints intervals completed, total work/rest, and per-task time (aggregated by name) to stdout
+- `writeSummaryFile(m, cfg)`: Writes the same content as a Markdown file to `cfg.SummaryFolder/<startedAt>.md`
+- `formatTime(d)`: Formats duration as `"MM:SS"` (hours overflow into minutes)
+- `formatDurationHuman(d)`: Human-readable format (`"Xh Ym"`, `"Xm Ys"`, `"Xs"`)
+
+**Config**:
+- `loadConfig()`: Reads YAML config; on first run, writes defaults to disk via `writeDefaultConfig()` and returns defaults
+- `configPath()`: Resolves `$XDG_CONFIG_HOME/pomo/config.yaml` or `~/.config/pomo/config.yaml`
+
+**Notifications**:
+- `sendNotification(isRest, intervalName)`: macOS uses `terminal-notifier`; Linux uses `notify-send`; errors are non-fatal
 
 ### Command Line Interface
-- Argument parsing in `parseArgs()` supports duration formats: `30`, `30m`, `30s`
-- Supports `--interval` / `-i` flag to override default 60-minute interval
-- Help system with usage examples
-- Validates work > 0, interval > 0, work < interval
-- Rest duration is computed as interval - work
+
+```
+pomo [duration] [--interval duration] [-h|--help] [-v|--version]
+```
+
+Duration formats: `30` (minutes), `30m`, `30s`. Defaults come from config file.
+
+Validation: work > 0, interval > 0, work < interval. Rest = interval − work.
+
+### Keyboard Controls
+
+| Key | Effect |
+|-----|--------|
+| `Space` | Toggle pause/resume |
+| `q` / `Ctrl+C` | Quit; print session summary |
+| `n` | Enter naming mode (rename current work interval; pre-fills current name) |
+| `a` | Enter task mode (add/switch task; work phase only) |
+| `s` | Skip current phase immediately |
+| `Enter` | Confirm input (naming / task mode) |
+| `Esc` | Cancel input (naming / task mode) |
+| `Backspace` / `Delete` | Remove last character (UTF-8 rune-aware) |
 
 ### Testing Strategy
-- Comprehensive unit tests for utility functions: `parseDuration()`, `formatTime()`, `createProgressBar()`
-- Test coverage includes edge cases, error conditions, and various input formats
-- The custom `createProgressBar()` function is maintained for test compatibility alongside the Bubbles progress component
 
-### Notifications
-- Cross-platform system notifications via `terminal-notifier` (macOS) and `notify-send` (Linux)
-- Graceful fallback when notification tools are unavailable
+- ~30 test functions in `main_test.go` (white-box, `package main`)
+- Covers: `parseDuration`, `formatTime`, `createProgressBar`, `formatDurationHuman`, `parseArgs`, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation
+- **Do not remove `createProgressBar()`** — it is never called at runtime but is required by existing tests
 
 ### Progress Bar Implementation
-- Uses Bubbles progress component with gradient styling
-- Responsive width handling (20-80 characters) based on terminal size
-- Maintains legacy `createProgressBar()` function for existing tests
+
+Two implementations coexist:
+1. **`createProgressBar()`** — legacy ASCII (`█`/`░`); used only in tests
+2. **`m.progress.ViewAs(float)`** — Bubbles `progress.Model` with gradient; used at runtime
+
+Responsive width: `terminal_width - 4 - 20`, clamped to `[20, 80]`.
+
+### Notifications
+
+- macOS: `terminal-notifier` (prints `brew install` hint on failure)
+- Linux: `notify-send` (errors silently ignored)
+- Fire-and-forget; never blocks the TUI
+
+### Release Pipeline
+
+- GoReleaser cross-compiles for linux/darwin/windows × amd64/arm64 with CGO disabled
+- `ldflags -X` injects `version`, `commit`, `date` into package vars (default to `"dev"`, `"none"`, `"unknown"`)
+- `bin/release` script handles local semver tag creation; GitHub Actions runs GoReleaser on `v*` tag push
+- CI workflow runs tests and build on push/PR to main
