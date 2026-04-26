@@ -79,6 +79,52 @@ Example usage:
 # Press 'n' again to rename if needed
 ```
 
+### Session Summaries
+
+When you quit `pomo`, it prints a terminal summary and optionally writes a Markdown file for your records.
+
+**Default behavior:** A Markdown summary is written to `~/pomos/<YYYY-MM-DD_HH-MM-SS>.md`.
+
+Each summary file includes a YAML frontmatter block at the top:
+```yaml
+---
+tags:
+  - daily
+  - pomo summary
+created: 2026-04-17
+---
+```
+
+The summary contains:
+- Intervals completed
+- Total time worked and rested
+- Per-task time breakdown (if tasks were tracked)
+
+**Configuration:** Add a `session_summary` block to your config file (`~/.config/pomo/config.yaml`):
+
+```yaml
+work_time: 50
+interval_time: 60
+session_summary:
+  create_session_summary: true
+  summary_folder: ~/pomos
+  summary_tags:
+    - daily
+    - pomo summary
+```
+
+| Option | Description |
+|--------|-------------|
+| `create_session_summary` | Whether to write a Markdown file on quit (default: `true`) |
+| `summary_folder` | Directory for summary files (default: `~/pomos`) |
+| `summary_tags` | Custom tags for the frontmatter block. Omit to use defaults. Set to `[]` to omit the `tags` key entirely. |
+
+You can also toggle summaries from the command line:
+```bash
+./pomo --no-create-session-summary   # Disable the Markdown summary for this run
+./pomo --create-session-summary      # Explicitly enable (usually the default)
+```
+
 ### Help
 ```bash
 ./pomo --help

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,5 +74,143 @@ func TestTaskSummaryMergesDuplicates(t *testing.T) {
 	}
 	if taskTotals["Feature B"] != 20*time.Minute {
 		t.Errorf("Expected Feature B total 20m, got %v", taskTotals["Feature B"])
+	}
+}
+
+func TestWriteSummaryFileIncludesFrontmatter(t *testing.T) {
+	dir := t.TempDir()
+	startedAt := time.Date(2026, 4, 17, 10, 30, 0, 0, time.UTC)
+
+	cfg := Config{
+		SessionSummary: SessionSummary{
+			Create: true,
+			Folder: dir,
+			Tags:   nil,
+		},
+	}
+
+	m := Model{
+		startedAt:          startedAt,
+		workDuration:       50 * time.Minute,
+		restDuration:       10 * time.Minute,
+		intervalDuration:   60 * time.Minute,
+		intervalsCompleted: 2,
+		totalWorked:        100 * time.Minute,
+		totalRested:        20 * time.Minute,
+		tasks:              []Task{},
+	}
+
+	if err := writeSummaryFile(m, cfg); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	filename := startedAt.Format("2006-01-02_15-04-05") + ".md"
+	content, err := os.ReadFile(filepath.Join(dir, filename))
+	if err != nil {
+		t.Fatalf("Could not read summary file: %v", err)
+	}
+
+	str := string(content)
+	if !strings.HasPrefix(str, "---\n") {
+		t.Error("Expected file to start with frontmatter delimiter")
+	}
+	if !strings.Contains(str, "tags:") {
+		t.Error("Expected frontmatter to contain tags")
+	}
+	if !strings.Contains(str, "- daily") {
+		t.Error("Expected default tag 'daily' in frontmatter")
+	}
+	if !strings.Contains(str, "- pomo summary") {
+		t.Error("Expected default tag 'pomo summary' in frontmatter")
+	}
+	if !strings.Contains(str, "2026-04-17") {
+		t.Error("Expected created date in frontmatter")
+	}
+}
+
+func TestWriteSummaryFileOmitsTagsWhenEmpty(t *testing.T) {
+	dir := t.TempDir()
+	startedAt := time.Date(2026, 4, 17, 10, 30, 0, 0, time.UTC)
+
+	cfg := Config{
+		SessionSummary: SessionSummary{
+			Create: true,
+			Folder: dir,
+			Tags:   []string{},
+		},
+	}
+
+	m := Model{
+		startedAt:          startedAt,
+		workDuration:       50 * time.Minute,
+		restDuration:       10 * time.Minute,
+		intervalDuration:   60 * time.Minute,
+		intervalsCompleted: 1,
+		totalWorked:        50 * time.Minute,
+		totalRested:        10 * time.Minute,
+		tasks:              []Task{},
+	}
+
+	if err := writeSummaryFile(m, cfg); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	filename := startedAt.Format("2006-01-02_15-04-05") + ".md"
+	content, err := os.ReadFile(filepath.Join(dir, filename))
+	if err != nil {
+		t.Fatalf("Could not read summary file: %v", err)
+	}
+
+	str := string(content)
+	if strings.Contains(str, "tags:") {
+		t.Error("Expected tags key to be omitted when tags list is empty")
+	}
+	if !strings.Contains(str, "2026-04-17") {
+		t.Error("Expected created date in frontmatter even when tags are empty")
+	}
+}
+
+func TestWriteSummaryFileCustomTags(t *testing.T) {
+	dir := t.TempDir()
+	startedAt := time.Date(2026, 4, 17, 10, 30, 0, 0, time.UTC)
+
+	cfg := Config{
+		SessionSummary: SessionSummary{
+			Create: true,
+			Folder: dir,
+			Tags:   []string{"custom", "another"},
+		},
+	}
+
+	m := Model{
+		startedAt:          startedAt,
+		workDuration:       50 * time.Minute,
+		restDuration:       10 * time.Minute,
+		intervalDuration:   60 * time.Minute,
+		intervalsCompleted: 1,
+		totalWorked:        50 * time.Minute,
+		totalRested:        10 * time.Minute,
+		tasks:              []Task{},
+	}
+
+	if err := writeSummaryFile(m, cfg); err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	filename := startedAt.Format("2006-01-02_15-04-05") + ".md"
+	content, err := os.ReadFile(filepath.Join(dir, filename))
+	if err != nil {
+		t.Fatalf("Could not read summary file: %v", err)
+	}
+
+	str := string(content)
+	if !strings.Contains(str, "- custom") {
+		t.Error("Expected custom tag in frontmatter")
+	}
+	if !strings.Contains(str, "- another") {
+		t.Error("Expected another tag in frontmatter")
+	}
+	if strings.Contains(str, "daily") {
+		t.Error("Did not expect default 'daily' tag when custom tags are set")
 	}
 }

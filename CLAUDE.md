@@ -48,10 +48,12 @@ go mod download              # Download dependencies
 ### Types
 
 **`Config`** — User preferences loaded from `~/.config/pomo/config.yaml` (XDG-compliant):
-- `SummaryFolder` (default `"~/pomos"`): Where to write Markdown session summaries
 - `WorkTime` (default `50`): Default work phase minutes
 - `IntervalTime` (default `60`): Default total interval minutes
-- `ProduceSummary` (default `true`): Whether to write a Markdown summary file on quit
+- `SessionSummary` (nested block):
+  - `Create` (default `true`): Whether to write a Markdown summary file on quit
+  - `Folder` (default `"~/pomos"`): Where to write Markdown session summaries
+  - `Tags` (default `nil`, resolves to `["daily", "pomo summary"]`): Custom tags for the YAML frontmatter block. Explicit `[]` omits the `tags` key entirely.
 
 **`Model`** — Central Bubbletea state:
 - `workDuration`, `restDuration`, `intervalDuration`: Phase configuration

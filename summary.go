@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 func printSummary(m Model) {
@@ -45,11 +47,11 @@ func printSummary(m Model) {
 }
 
 func writeSummaryFile(m Model, cfg Config) error {
-	if !cfg.CreateSessionSummary {
+	if !cfg.SessionSummary.Create {
 		return nil
 	}
 
-	pomosDir := cfg.SummaryFolder
+	pomosDir := cfg.SessionSummary.Folder
 	// Expand leading ~ to the user's home directory
 	if strings.HasPrefix(pomosDir, "~/") {
 		homeDir, err := os.UserHomeDir()
@@ -67,6 +69,13 @@ func writeSummaryFile(m Model, cfg Config) error {
 	filePath := filepath.Join(pomosDir, filename)
 
 	var sb strings.Builder
+
+	tags := cfg.SessionSummary.Tags
+	if tags == nil {
+		tags = []string{"daily", "pomo summary"}
+	}
+	frontmatter := buildFrontmatter(tags, m.startedAt)
+	sb.WriteString(frontmatter)
 
 	sb.WriteString(fmt.Sprintf("# Pomo Session — %s\n\n", m.startedAt.Format("2006-01-02 15:04:05")))
 	sb.WriteString(fmt.Sprintf("- **Intervals completed:** %d\n", m.intervalsCompleted))
@@ -105,8 +114,24 @@ func writeSummaryFile(m Model, cfg Config) error {
 		return fmt.Errorf("could not write summary file: %w", err)
 	}
 
-	fmt.Printf("\n  Summary saved to %s/%s\n", cfg.SummaryFolder, filename)
+	fmt.Printf("\n  Summary saved to %s/%s\n", cfg.SessionSummary.Folder, filename)
 	return nil
+}
+
+func buildFrontmatter(tags []string, created time.Time) string {
+	data := make(map[string]interface{})
+	if len(tags) > 0 {
+		data["tags"] = tags
+	}
+	data["created"] = created.Format("2006-01-02")
+
+	marshaled, err := yaml.Marshal(data)
+	if err != nil {
+		// yaml.Marshal on a simple map should never fail; fallback to empty frontmatter
+		return ""
+	}
+
+	return fmt.Sprintf("---\n%s---\n\n", string(marshaled))
 }
 
 func formatDurationHuman(d time.Duration) string {

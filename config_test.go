@@ -8,8 +8,8 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := defaultConfig()
-	if cfg.SummaryFolder != "~/pomos" {
-		t.Errorf("Expected SummaryFolder '~/pomos', got %q", cfg.SummaryFolder)
+	if cfg.SessionSummary.Folder != "~/pomos" {
+		t.Errorf("Expected SessionSummary.Folder '~/pomos', got %q", cfg.SessionSummary.Folder)
 	}
 	if cfg.WorkTime != 50 {
 		t.Errorf("Expected WorkTime 50, got %d", cfg.WorkTime)
@@ -17,8 +17,11 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.IntervalTime != 60 {
 		t.Errorf("Expected IntervalTime 60, got %d", cfg.IntervalTime)
 	}
-	if !cfg.CreateSessionSummary {
-		t.Error("Expected CreateSessionSummary to be true by default")
+	if !cfg.SessionSummary.Create {
+		t.Error("Expected SessionSummary.Create to be true by default")
+	}
+	if cfg.SessionSummary.Tags != nil {
+		t.Errorf("Expected SessionSummary.Tags to be nil by default, got %v", cfg.SessionSummary.Tags)
 	}
 }
 
@@ -40,11 +43,11 @@ func TestLoadConfigCreatesDefaultOnFirstRun(t *testing.T) {
 	if cfg.IntervalTime != def.IntervalTime {
 		t.Errorf("Expected IntervalTime %d, got %d", def.IntervalTime, cfg.IntervalTime)
 	}
-	if cfg.SummaryFolder != def.SummaryFolder {
-		t.Errorf("Expected SummaryFolder %q, got %q", def.SummaryFolder, cfg.SummaryFolder)
+	if cfg.SessionSummary.Folder != def.SessionSummary.Folder {
+		t.Errorf("Expected SessionSummary.Folder %q, got %q", def.SessionSummary.Folder, cfg.SessionSummary.Folder)
 	}
-	if cfg.CreateSessionSummary != def.CreateSessionSummary {
-		t.Errorf("Expected CreateSessionSummary %v, got %v", def.CreateSessionSummary, cfg.CreateSessionSummary)
+	if cfg.SessionSummary.Create != def.SessionSummary.Create {
+		t.Errorf("Expected SessionSummary.Create %v, got %v", def.SessionSummary.Create, cfg.SessionSummary.Create)
 	}
 
 	// Config file should have been created on disk
@@ -63,7 +66,7 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Fatalf("Could not create config dir: %v", err)
 	}
 
-	content := "summary_folder: /custom/path\nwork_time: 25\ninterval_time: 45\ncreate_session_summary: false\n"
+	content := "work_time: 25\ninterval_time: 45\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
 	configFile := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Could not write config file: %v", err)
@@ -74,8 +77,8 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if cfg.SummaryFolder != "/custom/path" {
-		t.Errorf("Expected SummaryFolder '/custom/path', got %q", cfg.SummaryFolder)
+	if cfg.SessionSummary.Folder != "/custom/path" {
+		t.Errorf("Expected SessionSummary.Folder '/custom/path', got %q", cfg.SessionSummary.Folder)
 	}
 	if cfg.WorkTime != 25 {
 		t.Errorf("Expected WorkTime 25, got %d", cfg.WorkTime)
@@ -83,8 +86,42 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	if cfg.IntervalTime != 45 {
 		t.Errorf("Expected IntervalTime 45, got %d", cfg.IntervalTime)
 	}
-	if cfg.CreateSessionSummary {
-		t.Error("Expected CreateSessionSummary to be false")
+	if cfg.SessionSummary.Create {
+		t.Error("Expected SessionSummary.Create to be false")
+	}
+	if cfg.SessionSummary.Tags != nil {
+		t.Errorf("Expected SessionSummary.Tags to be nil when omitted, got %v", cfg.SessionSummary.Tags)
+	}
+}
+
+func TestLoadConfigParsesTags(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	configDir := filepath.Join(dir, "pomo")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatalf("Could not create config dir: %v", err)
+	}
+
+	content := "work_time: 25\ninterval_time: 45\nsession_summary:\n  create_session_summary: true\n  summary_folder: /custom/path\n  summary_tags:\n    - tag\n    - another\n"
+	configFile := filepath.Join(configDir, "config.yaml")
+	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
+		t.Fatalf("Could not write config file: %v", err)
+	}
+
+	cfg, err := loadConfig()
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	expectedTags := []string{"tag", "another"}
+	if len(cfg.SessionSummary.Tags) != len(expectedTags) {
+		t.Fatalf("Expected %d tags, got %d", len(expectedTags), len(cfg.SessionSummary.Tags))
+	}
+	for i, tag := range expectedTags {
+		if cfg.SessionSummary.Tags[i] != tag {
+			t.Errorf("Expected tag %q at index %d, got %q", tag, i, cfg.SessionSummary.Tags[i])
+		}
 	}
 }
 

@@ -387,7 +387,7 @@ func main() {
 
 	// CLI flag overrides config file value
 	if result.createSessionSummary != nil {
-		cfg.CreateSessionSummary = *result.createSessionSummary
+		cfg.SessionSummary.Create = *result.createSessionSummary
 	}
 
 	p := tea.NewProgram(*result.model)

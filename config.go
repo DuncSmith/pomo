@@ -8,21 +8,30 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// SessionSummary holds configuration for session summary output.
+type SessionSummary struct {
+	Create bool     `yaml:"create_session_summary"`
+	Folder string   `yaml:"summary_folder"`
+	Tags   []string `yaml:"summary_tags"`
+}
+
 // Config holds user preferences loaded from the YAML config file.
 type Config struct {
-	SummaryFolder        string `yaml:"summary_folder"`
-	WorkTime             int    `yaml:"work_time"`
-	IntervalTime         int    `yaml:"interval_time"`
-	CreateSessionSummary bool   `yaml:"create_session_summary"`
+	WorkTime       int            `yaml:"work_time"`
+	IntervalTime   int            `yaml:"interval_time"`
+	SessionSummary SessionSummary `yaml:"session_summary"`
 }
 
 // defaultConfig returns the built-in default configuration.
 func defaultConfig() Config {
 	return Config{
-		SummaryFolder:        "~/pomos",
-		WorkTime:             50,
-		IntervalTime:         60,
-		CreateSessionSummary: true,
+		WorkTime:     50,
+		IntervalTime: 60,
+		SessionSummary: SessionSummary{
+			Create: true,
+			Folder: "~/pomos",
+			Tags:   nil,
+		},
 	}
 }
 

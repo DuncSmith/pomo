@@ -291,10 +291,12 @@ func TestParseArgs(t *testing.T) {
 
 func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	cfg := Config{
-		WorkTime:             30,
-		IntervalTime:         75,
-		SummaryFolder:        "~/pomos",
-		CreateSessionSummary: true,
+		WorkTime:     30,
+		IntervalTime: 75,
+		SessionSummary: SessionSummary{
+			Folder: "~/pomos",
+			Create: true,
+		},
 	}
 	result, err := parseArgs([]string{}, cfg)
 	if err != nil {
@@ -351,10 +353,12 @@ func TestParseArgsCreateSessionSummaryFlag(t *testing.T) {
 
 func TestParseArgsCLIOverridesConfig(t *testing.T) {
 	cfg := Config{
-		WorkTime:             30,
-		IntervalTime:         75,
-		SummaryFolder:        "~/pomos",
-		CreateSessionSummary: true,
+		WorkTime:     30,
+		IntervalTime: 75,
+		SessionSummary: SessionSummary{
+			Folder: "~/pomos",
+			Create: true,
+		},
 	}
 	result, err := parseArgs([]string{"45", "-i", "90"}, cfg)
 	if err != nil {
