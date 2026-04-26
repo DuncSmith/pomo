@@ -10,19 +10,19 @@ import (
 
 // Config holds user preferences loaded from the YAML config file.
 type Config struct {
-	SummaryFolder  string `yaml:"summary_folder"`
-	WorkTime       int    `yaml:"work_time"`
-	IntervalTime   int    `yaml:"interval_time"`
-	ProduceSummary bool   `yaml:"produce_summary"`
+	SummaryFolder        string `yaml:"summary_folder"`
+	WorkTime             int    `yaml:"work_time"`
+	IntervalTime         int    `yaml:"interval_time"`
+	CreateSessionSummary bool   `yaml:"create_session_summary"`
 }
 
 // defaultConfig returns the built-in default configuration.
 func defaultConfig() Config {
 	return Config{
-		SummaryFolder:  "~/pomos",
-		WorkTime:       50,
-		IntervalTime:   60,
-		ProduceSummary: true,
+		SummaryFolder:        "~/pomos",
+		WorkTime:             50,
+		IntervalTime:         60,
+		CreateSessionSummary: true,
 	}
 }
 

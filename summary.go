@@ -45,7 +45,7 @@ func printSummary(m Model) {
 }
 
 func writeSummaryFile(m Model, cfg Config) error {
-	if !cfg.ProduceSummary {
+	if !cfg.CreateSessionSummary {
 		return nil
 	}
 

@@ -291,10 +291,10 @@ func TestParseArgs(t *testing.T) {
 
 func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	cfg := Config{
-		WorkTime:       30,
-		IntervalTime:   75,
-		SummaryFolder:  "~/pomos",
-		ProduceSummary: true,
+		WorkTime:             30,
+		IntervalTime:         75,
+		SummaryFolder:        "~/pomos",
+		CreateSessionSummary: true,
 	}
 	result, err := parseArgs([]string{}, cfg)
 	if err != nil {
@@ -311,12 +311,50 @@ func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	}
 }
 
+func TestParseArgsCreateSessionSummaryFlag(t *testing.T) {
+	t.Run("--create-session-summary sets override to true", func(t *testing.T) {
+		result, err := parseArgs([]string{"--create-session-summary"}, defaultConfig())
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.createSessionSummary == nil {
+			t.Fatal("Expected createSessionSummary to be set, got nil")
+		}
+		if !*result.createSessionSummary {
+			t.Error("Expected createSessionSummary to be true")
+		}
+	})
+
+	t.Run("--no-create-session-summary sets override to false", func(t *testing.T) {
+		result, err := parseArgs([]string{"--no-create-session-summary"}, defaultConfig())
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.createSessionSummary == nil {
+			t.Fatal("Expected createSessionSummary to be set, got nil")
+		}
+		if *result.createSessionSummary {
+			t.Error("Expected createSessionSummary to be false")
+		}
+	})
+
+	t.Run("no flag leaves override as nil", func(t *testing.T) {
+		result, err := parseArgs([]string{}, defaultConfig())
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result.createSessionSummary != nil {
+			t.Errorf("Expected createSessionSummary to be nil, got %v", *result.createSessionSummary)
+		}
+	})
+}
+
 func TestParseArgsCLIOverridesConfig(t *testing.T) {
 	cfg := Config{
-		WorkTime:       30,
-		IntervalTime:   75,
-		SummaryFolder:  "~/pomos",
-		ProduceSummary: true,
+		WorkTime:             30,
+		IntervalTime:         75,
+		SummaryFolder:        "~/pomos",
+		CreateSessionSummary: true,
 	}
 	result, err := parseArgs([]string{"45", "-i", "90"}, cfg)
 	if err != nil {

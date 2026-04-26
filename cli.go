@@ -18,9 +18,10 @@ var (
 
 // parseArgsResult represents the result of parsing command-line arguments
 type parseArgsResult struct {
-	model       *Model
-	action      string // "", "help", or "version"
-	versionInfo string
+	model                *Model
+	action               string // "", "help", or "version"
+	versionInfo          string
+	createSessionSummary *bool // nil means "use config value"
 }
 
 func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
@@ -37,6 +38,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 	var workDuration time.Duration
 	var intervalDuration time.Duration
 	var hasWork, hasInterval bool
+	var createSessionSummary *bool
 
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--interval" || args[i] == "-i" {
@@ -50,6 +52,12 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 			intervalDuration = d
 			hasInterval = true
 			i++
+		} else if args[i] == "--create-session-summary" {
+			t := true
+			createSessionSummary = &t
+		} else if args[i] == "--no-create-session-summary" {
+			f := false
+			createSessionSummary = &f
 		} else {
 			if hasWork {
 				return nil, fmt.Errorf("unexpected argument: %s", args[i])
@@ -99,7 +107,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		taskInput:           "",
 		startedAt:           now,
 	}
-	return &parseArgsResult{model: model}, nil
+	return &parseArgsResult{model: model, createSessionSummary: createSessionSummary}, nil
 }
 
 func showHelp() {
@@ -115,9 +123,11 @@ func showHelp() {
 	fmt.Println("  pomo 45 -i 90 # 45m work, 45m rest (90m interval)")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -i, --interval  Set interval duration (default: 60m)")
-	fmt.Println("  -v, --version   Show version information")
-	fmt.Println("  -h, --help      Show this help")
+	fmt.Println("  -i, --interval              Set interval duration (default: 60m)")
+	fmt.Println("      --create-session-summary    Write a Markdown summary on quit (default: true)")
+	fmt.Println("      --no-create-session-summary Disable writing the Markdown summary")
+	fmt.Println("  -v, --version               Show version information")
+	fmt.Println("  -h, --help                  Show this help")
 	fmt.Println()
 	fmt.Println("Default: 50m work, 10m rest (60m interval)")
 }

@@ -17,8 +17,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.IntervalTime != 60 {
 		t.Errorf("Expected IntervalTime 60, got %d", cfg.IntervalTime)
 	}
-	if !cfg.ProduceSummary {
-		t.Error("Expected ProduceSummary to be true by default")
+	if !cfg.CreateSessionSummary {
+		t.Error("Expected CreateSessionSummary to be true by default")
 	}
 }
 
@@ -43,8 +43,8 @@ func TestLoadConfigCreatesDefaultOnFirstRun(t *testing.T) {
 	if cfg.SummaryFolder != def.SummaryFolder {
 		t.Errorf("Expected SummaryFolder %q, got %q", def.SummaryFolder, cfg.SummaryFolder)
 	}
-	if cfg.ProduceSummary != def.ProduceSummary {
-		t.Errorf("Expected ProduceSummary %v, got %v", def.ProduceSummary, cfg.ProduceSummary)
+	if cfg.CreateSessionSummary != def.CreateSessionSummary {
+		t.Errorf("Expected CreateSessionSummary %v, got %v", def.CreateSessionSummary, cfg.CreateSessionSummary)
 	}
 
 	// Config file should have been created on disk
@@ -63,7 +63,7 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Fatalf("Could not create config dir: %v", err)
 	}
 
-	content := "summary_folder: /custom/path\nwork_time: 25\ninterval_time: 45\nproduce_summary: false\n"
+	content := "summary_folder: /custom/path\nwork_time: 25\ninterval_time: 45\ncreate_session_summary: false\n"
 	configFile := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Could not write config file: %v", err)
@@ -83,8 +83,8 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	if cfg.IntervalTime != 45 {
 		t.Errorf("Expected IntervalTime 45, got %d", cfg.IntervalTime)
 	}
-	if cfg.ProduceSummary {
-		t.Error("Expected ProduceSummary to be false")
+	if cfg.CreateSessionSummary {
+		t.Error("Expected CreateSessionSummary to be false")
 	}
 }
 
