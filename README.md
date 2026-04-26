@@ -54,12 +54,14 @@ The timer runs work → rest → work → rest continuously until you quit.
 On exit, a session summary shows:
 - Intervals completed
 - Total time worked and rested  
-- Breakdown of work time by interval name (if intervals were named)
+- Breakdown of work time by interval name (if named)
+- Detailed time breakdown for each task tracked
 
 ### Keyboard Controls
 - `Space` - Pause/resume timer
 - `q` or `Ctrl+C` - Quit application
 - `n` - Name current work interval (press again to rename)
+- `a` - Add or switch current task (work phase only)
 - `s` - Skip current phase (work → rest or rest → work)
 
 ### Interval Naming
@@ -78,6 +80,17 @@ Example usage:
 # After break, next work interval will inherit "Email cleanup"
 # Press 'n' again to rename if needed
 ```
+
+### Tracking Tasks
+
+During work phases, you can track specific tasks by pressing `a` (for "add" or "active task"). 
+
+- Press `a` during a work phase to name your current task.
+- Tasks are automatically ended when a rest phase begins or when you start a new task.
+- When a new work interval starts, the previous task name is carried over automatically.
+- Your session summary will include a breakdown of time spent on each task.
+
+This is useful for tracking how much time you spend on specific sub-tasks within a longer Pomodoro session.
 
 ### Session Summaries
 
