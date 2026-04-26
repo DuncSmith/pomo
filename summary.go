@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 )
 
 func printSummary(m Model) {
@@ -119,19 +118,17 @@ func writeSummaryFile(m Model, cfg Config) error {
 }
 
 func buildFrontmatter(tags []string, created time.Time) string {
-	data := make(map[string]interface{})
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	sb.WriteString(fmt.Sprintf("created: %s\n", created.Format("2006-01-02")))
 	if len(tags) > 0 {
-		data["tags"] = tags
+		sb.WriteString("tags:\n")
+		for _, tag := range tags {
+			sb.WriteString(fmt.Sprintf("  - %s\n", tag))
+		}
 	}
-	data["created"] = created.Format("2006-01-02")
-
-	marshaled, err := yaml.Marshal(data)
-	if err != nil {
-		// yaml.Marshal on a simple map should never fail; fallback to empty frontmatter
-		return ""
-	}
-
-	return fmt.Sprintf("---\n%s---\n\n", string(marshaled))
+	sb.WriteString("---\n\n")
+	return sb.String()
 }
 
 func formatDurationHuman(d time.Duration) string {
