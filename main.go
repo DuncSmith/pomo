@@ -347,9 +347,10 @@ func (m Model) View() tea.View {
 
 		s.WriteString("\n")
 		if m.isRest {
-			s.WriteString("Press [space] to pause/resume, [s] to skip, [q] to quit\n")
+			s.WriteString("Press [s] to skip interval, [space] to pause/resume, [q] to quit\n")
 		} else {
-			s.WriteString("Press [space] to pause/resume, [n] to rename, [a] to add task, [s] to skip, [q] to quit\n")
+			s.WriteString("[n] rename interval  [s] skip interval  [a] add task\n")
+			s.WriteString("[space] pause/resume  [q] quit\n")
 		}
 	}
 
