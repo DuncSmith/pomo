@@ -30,7 +30,7 @@ func defaultConfig() Config {
 		SessionSummary: SessionSummary{
 			Create: true,
 			Folder: "~/pomos",
-			Tags:   nil,
+			Tags:   []string{"daily", "pomo summary"},
 		},
 	}
 }

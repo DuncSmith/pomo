@@ -20,8 +20,14 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be true by default")
 	}
-	if cfg.SessionSummary.Tags != nil {
-		t.Errorf("Expected SessionSummary.Tags to be nil by default, got %v", cfg.SessionSummary.Tags)
+	expectedTags := []string{"daily", "pomo summary"}
+	if len(cfg.SessionSummary.Tags) != len(expectedTags) {
+		t.Fatalf("Expected %d default tags, got %d", len(expectedTags), len(cfg.SessionSummary.Tags))
+	}
+	for i, tag := range expectedTags {
+		if cfg.SessionSummary.Tags[i] != tag {
+			t.Errorf("Expected default tag %q at index %d, got %q", tag, i, cfg.SessionSummary.Tags[i])
+		}
 	}
 }
 
@@ -89,8 +95,15 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	if cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be false")
 	}
-	if cfg.SessionSummary.Tags != nil {
-		t.Errorf("Expected SessionSummary.Tags to be nil when omitted, got %v", cfg.SessionSummary.Tags)
+	// When summary_tags is omitted in config file, defaults are retained
+	expectedDefaultTags := []string{"daily", "pomo summary"}
+	if len(cfg.SessionSummary.Tags) != len(expectedDefaultTags) {
+		t.Fatalf("Expected %d default tags when omitted, got %d", len(expectedDefaultTags), len(cfg.SessionSummary.Tags))
+	}
+	for i, tag := range expectedDefaultTags {
+		if cfg.SessionSummary.Tags[i] != tag {
+			t.Errorf("Expected default tag %q at index %d, got %q", tag, i, cfg.SessionSummary.Tags[i])
+		}
 	}
 }
 
