@@ -2,7 +2,8 @@
 version: 2
 
 builds:
-  - env:
+  - main: ./cmd/pomo
+    env:
       - CGO_ENABLED=0
     goos:
       - linux

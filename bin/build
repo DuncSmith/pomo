@@ -49,7 +49,7 @@ main() {
         -X main.date=${build_date}"
 
     echo "Building pomo ${version} (commit: ${commit})"
-    go build -ldflags "$ldflags" -o "$BINARY" .
+    go build -ldflags "$ldflags" -o "$BINARY" ./cmd/pomo
 
     mkdir -p "$INSTALL_DIR"
     mv "$BINARY" "${INSTALL_DIR}/${BINARY}"

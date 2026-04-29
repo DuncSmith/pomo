@@ -10,7 +10,7 @@ A Pomodoro timer CLI application built with Go using the Bubbletea TUI framework
 
 ### Build and Run
 ```bash
-go build -o pomo .           # Build the executable
+go build -o pomo ./cmd/pomo  # Build the executable
 ./pomo                       # Run with default 50m work / 10m rest (60m interval)
 ./pomo 25                    # Run 25m work / 35m rest (60m interval)
 ./pomo 45 --interval 90     # Run 45m work / 45m rest (90m interval)
@@ -22,9 +22,9 @@ bin/release                  # Bump version and push a semver git tag
 
 ### Testing
 ```bash
-go test                      # Run all tests
-go test -v                   # Run tests with verbose output
-go test -run TestName        # Run a specific test
+go test ./...                # Run all tests
+go test -v ./...             # Run tests with verbose output
+go test -run TestName ./...  # Run a specific test
 ```
 
 ### Dependencies
@@ -36,12 +36,14 @@ go mod download              # Download dependencies
 ## Architecture
 
 ### Core Structure
+- **Layout**: `cmd/pomo/` holds all source; `go.mod` at repo root
 - **Multi-file architecture**: Code is organized by concern across files, all in `package main`
-  - `main.go` (~406 lines) — Bubbletea `Model`, `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`
-  - `config.go` (~92 lines) — `Config` type, YAML config loading/writing
-  - `cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
-  - `summary.go` (~145 lines) — Session summary output (terminal + Markdown file), `buildFrontmatter`, `formatDurationHuman`
-  - `notification.go` (~29 lines) — Desktop notifications (macOS/Linux)
+  - `cmd/pomo/main.go` (~47 lines) — `main()` entry point only
+  - `cmd/pomo/model.go` (~270 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`
+  - `cmd/pomo/config.go` (~92 lines) — `Config` type, YAML config loading/writing
+  - `cmd/pomo/cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
+  - `cmd/pomo/summary.go` (~155 lines) — Session summary output (terminal + Markdown file), `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
+  - `cmd/pomo/notification.go` (~29 lines) — Desktop notifications (macOS/Linux)
 - **Bubbletea TUI Framework**: Elm Architecture pattern (Model / Update / View); uses `charm.land/bubbletea/v2` and `charm.land/bubbles/v2` (not the `github.com/charmbracelet` paths)
 - **Bubbles Components**: Official `progress.Model` component for the gradient progress bar (`progress.WithDefaultBlend()`)
 
@@ -89,8 +91,8 @@ go mod download              # Download dependencies
 - `phaseDuration()`: Returns `workDuration` or `restDuration` based on `isRest`
 
 **Phase transitions**:
-- `transitionToRest(elapsed)`: Accumulates work time, sets `isRest=true`, ends active task
-- `transitionToWork()`: Accumulates rest time, increments counter, generates new interval name, continues last task name into a new Task entry
+- `transitionToRest(elapsed, now)`: Accumulates `elapsed` work time, sets `isRest=true`, ends active task at `now`
+- `transitionToWork(elapsed, now)`: Accumulates `elapsed` rest time, increments counter, generates new interval name, continues last task name into a new Task entry
 - `generateIntervalName(n, now)`: Produces `"Morning #N"` / `"Afternoon #N"` / `"Evening #N"` / `"Night #N"` based on time of day
 
 **Task tracking** (pointer receivers, mutate in place):
@@ -160,9 +162,8 @@ Responsive width: `terminal_width - 4 - 20`, clamped to `[20, 80]`.
 
 ### Notifications
 
-- macOS: `terminal-notifier` (prints `brew install` hint on failure)
-- Linux: `notify-send` (errors silently ignored)
-- Fire-and-forget; never blocks the TUI
+- macOS: `terminal-notifier`; Linux: `notify-send` — both silently ignore errors
+- Called as `go sendNotification(...)` from `Update()` so it never blocks the tick loop
 
 ### Release Pipeline
 
