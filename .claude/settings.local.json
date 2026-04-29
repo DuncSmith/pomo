@@ -6,7 +6,8 @@
       "Bash(go test:*)",
       "Bash(go mod:*)",
       "Bash(./pomo:*)",
-      "Bash(git -C /home/duncan/pomo mv main.go model.go cli.go config.go summary.go notification.go main_test.go cli_test.go config_test.go summary_test.go cmd/pomo/)"
+      "Bash(git -C /home/duncan/pomo mv main.go model.go cli.go config.go summary.go notification.go main_test.go cli_test.go config_test.go summary_test.go cmd/pomo/)",
+      "Bash(/home/duncan/.local/share/mise/installs/go/1.26.2/bin/go test *)"
     ],
     "deny": []
   }

@@ -104,6 +104,7 @@ func buildFrontmatter(tags []string, created time.Time) string {
 	var sb strings.Builder
 	sb.WriteString("---\n")
 	sb.WriteString(fmt.Sprintf("created: %s\n", created.Format("2006-01-02")))
+	sb.WriteString(fmt.Sprintf("title: %s\n", created.Format("2006-01-02")))
 	if len(tags) > 0 {
 		sb.WriteString("tags:\n")
 		for _, tag := range tags {

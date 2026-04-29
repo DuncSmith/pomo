@@ -83,14 +83,22 @@ Example usage:
 
 ### Tracking Tasks
 
-During work phases, you can track specific tasks by pressing `a` (for "add" or "active task"). 
+During work phases, press `a` to name your current task or switch to a different one.
 
-- Press `a` during a work phase to name your current task.
-- Tasks are automatically ended when a rest phase begins or when you start a new task.
-- When a new work interval starts, the previous task name is carried over automatically.
-- Your session summary will include a breakdown of time spent on each task.
+- **First task of the session:** a blank prompt appears — type a name and press Enter.
+- **With previous tasks:** a numbered list of recently-used task names appears. Press the corresponding number key to resume that task instantly, or start typing to create a new one.
 
-This is useful for tracking how much time you spend on specific sub-tasks within a longer Pomodoro session.
+```
+Recent tasks:
+  1  Email cleanup
+  2  Code review
+
+[1-9] resume   [type] new task   [esc] cancel
+```
+
+- Tasks are automatically ended when a rest phase begins or when you switch to a new task.
+- When a new work interval starts after a break, the previous task name is carried over automatically.
+- Your session summary includes a breakdown of time spent on each task.
 
 ### Session Summaries
 

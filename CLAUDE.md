@@ -39,7 +39,7 @@ go mod download              # Download dependencies
 - **Layout**: `cmd/pomo/` holds all source; `go.mod` at repo root
 - **Multi-file architecture**: Code is organized by concern across files, all in `package main`
   - `cmd/pomo/main.go` (~47 lines) — `main()` entry point only
-  - `cmd/pomo/model.go` (~270 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`
+  - `cmd/pomo/model.go` (~310 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`, `recentTaskNames`
   - `cmd/pomo/config.go` (~92 lines) — `Config` type, YAML config loading/writing
   - `cmd/pomo/cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
   - `cmd/pomo/summary.go` (~155 lines) — Session summary output (terminal + Markdown file), `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
@@ -69,6 +69,7 @@ go mod download              # Download dependencies
 - `currentIntervalName`: Display name for the current work interval (e.g. `"Morning #1"`)
 - `namingMode` / `nameInput`: State for the inline interval rename prompt
 - `taskMode` / `taskInput`: State for the inline task name input prompt
+- `recentTasks []string`: Recent unique task names populated when entering task mode; cleared on exit
 - `tasks []Task`: Append-only log of all task records for the session
 - `startedAt`: Session start timestamp (used to name the summary file)
 
@@ -102,7 +103,8 @@ go mod download              # Download dependencies
 
 **Input modes**:
 - `handleNamingInput()`: Enter/Esc to commit/cancel; Backspace/Delete are UTF-8 rune-aware
-- `handleTaskInput()`: Same logic; on Enter calls `startTask()` if input is non-empty
+- `handleTaskInput()`: Enter/Esc to commit/cancel; when `taskInput` is empty a digit `1`–`9` selects from `recentTasks` (if in range) or falls through to free-text
+- `recentTaskNames(tasks)`: Walks `tasks` in reverse, deduplicates, excludes the active task, returns at most 9 names most-recent-first
 
 **CLI**:
 - `parseArgs(args, cfg)`: Parses positional work duration + `--interval`/`-i` flag; falls back to config values; validates constraints; handles `--help`/`-h` and `--version`/`-v`
@@ -151,8 +153,8 @@ The `--create-session-summary` / `--no-create-session-summary` flags override `c
 
 ### Testing Strategy
 
-- ~34 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
-- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation
+- ~44 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
+- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation, recent task picker
 
 ### Progress Bar Implementation
 

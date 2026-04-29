@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -428,6 +429,186 @@ func TestTaskInputCancel(t *testing.T) {
 	}
 	if len(model.tasks) != 0 {
 		t.Error("Expected no tasks to be created on cancel")
+	}
+}
+
+func TestRecentTaskNamesEmpty(t *testing.T) {
+	names := recentTaskNames([]Task{})
+	if len(names) != 0 {
+		t.Errorf("Expected no names for empty task list, got %v", names)
+	}
+}
+
+func TestRecentTaskNamesExcludesActive(t *testing.T) {
+	now := time.Now()
+	tasks := []Task{
+		{Name: "task1", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+		{Name: "task2", StartedAt: now.Add(10 * time.Minute)}, // active (zero EndedAt)
+	}
+	names := recentTaskNames(tasks)
+	for _, n := range names {
+		if n == "task2" {
+			t.Error("Expected active task to be excluded from recent list")
+		}
+	}
+	if len(names) != 1 || names[0] != "task1" {
+		t.Errorf("Expected [task1], got %v", names)
+	}
+}
+
+func TestRecentTaskNamesMostRecentFirst(t *testing.T) {
+	now := time.Now()
+	tasks := []Task{
+		{Name: "first", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+		{Name: "second", StartedAt: now.Add(10 * time.Minute), EndedAt: now.Add(20 * time.Minute)},
+		{Name: "third", StartedAt: now.Add(20 * time.Minute), EndedAt: now.Add(30 * time.Minute)},
+	}
+	names := recentTaskNames(tasks)
+	if len(names) != 3 {
+		t.Fatalf("Expected 3 names, got %d", len(names))
+	}
+	if names[0] != "third" || names[1] != "second" || names[2] != "first" {
+		t.Errorf("Expected most-recent-first order, got %v", names)
+	}
+}
+
+func TestRecentTaskNamesDeduplicated(t *testing.T) {
+	now := time.Now()
+	tasks := []Task{
+		{Name: "task1", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+		{Name: "task2", StartedAt: now.Add(10 * time.Minute), EndedAt: now.Add(20 * time.Minute)},
+		{Name: "task1", StartedAt: now.Add(20 * time.Minute), EndedAt: now.Add(30 * time.Minute)},
+	}
+	names := recentTaskNames(tasks)
+	if len(names) != 2 {
+		t.Fatalf("Expected 2 deduplicated names, got %v", names)
+	}
+	// task1 appeared most recently, so it should be first
+	if names[0] != "task1" || names[1] != "task2" {
+		t.Errorf("Expected [task1 task2], got %v", names)
+	}
+}
+
+func TestRecentTaskNamesMaxNine(t *testing.T) {
+	now := time.Now()
+	tasks := make([]Task, 11)
+	for i := range tasks {
+		tasks[i] = Task{
+			Name:      fmt.Sprintf("task%d", i+1),
+			StartedAt: now.Add(time.Duration(i) * time.Minute),
+			EndedAt:   now.Add(time.Duration(i+1) * time.Minute),
+		}
+	}
+	names := recentTaskNames(tasks)
+	if len(names) != 9 {
+		t.Errorf("Expected max 9 names, got %d", len(names))
+	}
+}
+
+func TestTaskPickerSelectByDigit(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		taskMode: true,
+		taskInput: "",
+		recentTasks: []string{"task1", "task2"},
+		tasks: []Task{
+			{Name: "task1", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+			{Name: "task2", StartedAt: now.Add(10 * time.Minute), EndedAt: now.Add(20 * time.Minute)},
+		},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to be false after selecting from picker")
+	}
+	if model.recentTasks != nil {
+		t.Error("Expected recentTasks to be cleared after selection")
+	}
+	active := model.activeTask()
+	if active == nil || active.Name != "task1" {
+		t.Errorf("Expected active task 'task1', got %v", active)
+	}
+}
+
+func TestTaskPickerDigitOutOfRange(t *testing.T) {
+	m := Model{
+		taskMode:    true,
+		taskInput:   "",
+		recentTasks: []string{"task1", "task2"},
+		tasks:       []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: '5', Text: "5"})
+	model := result.(Model)
+
+	if !model.taskMode {
+		t.Error("Expected taskMode to remain true when digit is out of range")
+	}
+	if model.taskInput != "5" {
+		t.Errorf("Expected digit to fall through to taskInput, got %q", model.taskInput)
+	}
+}
+
+func TestTaskPickerEscClearsRecentTasks(t *testing.T) {
+	m := Model{
+		taskMode:    true,
+		taskInput:   "",
+		recentTasks: []string{"task1"},
+		tasks:       []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to be false after Esc")
+	}
+	if model.recentTasks != nil {
+		t.Error("Expected recentTasks to be cleared after Esc")
+	}
+}
+
+func TestTaskPickerDigitAfterTypingIsText(t *testing.T) {
+	m := Model{
+		taskMode:    true,
+		taskInput:   "my",
+		recentTasks: []string{"task1"},
+		tasks:       []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	model := result.(Model)
+
+	if model.taskInput != "my1" {
+		t.Errorf("Expected digit to append to taskInput when not empty, got %q", model.taskInput)
+	}
+	if !model.taskMode {
+		t.Error("Expected taskMode to remain true while typing")
+	}
+}
+
+func TestTaskKeyPopulatesRecentTasks(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		workDuration: 50 * time.Minute,
+		restDuration: 10 * time.Minute,
+		remaining:    40 * time.Minute,
+		isRest:       false,
+		tasks: []Task{
+			{Name: "old task", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+		},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	model := result.(Model)
+
+	if !model.taskMode {
+		t.Error("Expected taskMode to be true")
+	}
+	if len(model.recentTasks) != 1 || model.recentTasks[0] != "old task" {
+		t.Errorf("Expected recentTasks [old task], got %v", model.recentTasks)
 	}
 }
 
