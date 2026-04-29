@@ -39,7 +39,9 @@ go mod download              # Download dependencies
 - **Layout**: `cmd/pomo/` holds all source; `go.mod` at repo root
 - **Multi-file architecture**: Code is organized by concern across files, all in `package main`
   - `cmd/pomo/main.go` (~47 lines) — `main()` entry point only
-  - `cmd/pomo/model.go` (~310 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`, `recentTaskNames`
+  - `cmd/pomo/model.go` (~238 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, `formatTime`
+  - `cmd/pomo/tasks.go` (~123 lines) — Task management (`activeTask`, `endActiveTask`, `startTask`, `recentTaskNames`), input handlers (`handleNamingInput`, `handleTaskInput`)
+  - `cmd/pomo/timer.go` (~55 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`)
   - `cmd/pomo/config.go` (~92 lines) — `Config` type, YAML config loading/writing
   - `cmd/pomo/cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
   - `cmd/pomo/summary.go` (~155 lines) — Session summary output (terminal + Markdown file), `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
