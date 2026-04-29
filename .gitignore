@@ -31,3 +31,4 @@ go.work.sum
 # .idea/
 # .vscode/
 plan.md
+.claude/settings.local.json
