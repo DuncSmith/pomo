@@ -18,10 +18,7 @@ func sendNotification(isRest bool, intervalName string) {
 
 	if runtime.GOOS == "darwin" {
 		cmd := exec.Command("terminal-notifier", "-title", title, "-message", message, "-sound", "default")
-		err := cmd.Run()
-		if err != nil {
-			fmt.Printf("Debug: terminal-notifier not found. Install it with: brew install terminal-notifier\n")
-		}
+		cmd.Run()
 	} else {
 		cmd := exec.Command("notify-send", title, message)
 		cmd.Run()

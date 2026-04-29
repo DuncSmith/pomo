@@ -270,7 +270,7 @@ func TestTransitionToRestEndsActiveTask(t *testing.T) {
 	}
 	m.startTask("Active task", start)
 
-	m = m.transitionToRest(50 * time.Minute)
+	m = m.transitionToRest(50*time.Minute, time.Now())
 
 	if m.activeTask() != nil {
 		t.Error("Expected no active task after transitioning to rest")
@@ -296,7 +296,7 @@ func TestTransitionToWorkContinuesLastTask(t *testing.T) {
 		EndedAt:   start.Add(50 * time.Minute),
 	})
 
-	m = m.transitionToWork()
+	m = m.transitionToWork(10*time.Minute, time.Now())
 
 	// Should have created a new task entry continuing the last task name
 	if len(m.tasks) != 2 {
@@ -319,7 +319,7 @@ func TestTransitionToWorkNoTasksNoContinuation(t *testing.T) {
 		tasks:              []Task{},
 	}
 
-	m = m.transitionToWork()
+	m = m.transitionToWork(10*time.Minute, time.Now())
 
 	// No tasks to continue
 	if len(m.tasks) != 0 {
@@ -337,7 +337,7 @@ func TestTransitionToWorkGeneratesNewIntervalName(t *testing.T) {
 		tasks:               []Task{},
 	}
 
-	m = m.transitionToWork()
+	m = m.transitionToWork(10*time.Minute, time.Now())
 
 	// Name should be auto-generated, not the old custom name
 	if m.currentIntervalName == "My Custom Name" {
@@ -428,5 +428,47 @@ func TestTaskInputCancel(t *testing.T) {
 	}
 	if len(model.tasks) != 0 {
 		t.Error("Expected no tasks to be created on cancel")
+	}
+}
+
+func TestSkipWorkTracksPartialTime(t *testing.T) {
+	m := Model{
+		workDuration:     50 * time.Minute,
+		restDuration:     10 * time.Minute,
+		intervalDuration: 60 * time.Minute,
+		remaining:        30 * time.Minute, // 20 minutes into work
+		isRest:           false,
+		tasks:            []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	model := result.(Model)
+
+	if model.totalWorked != 20*time.Minute {
+		t.Errorf("Expected 20m partial work tracked, got %v", model.totalWorked)
+	}
+	if !model.isRest {
+		t.Error("Expected to transition to rest phase after skipping work")
+	}
+}
+
+func TestSkipRestTracksPartialTime(t *testing.T) {
+	m := Model{
+		workDuration:     50 * time.Minute,
+		restDuration:     10 * time.Minute,
+		intervalDuration: 60 * time.Minute,
+		remaining:        7 * time.Minute, // 3 minutes into rest
+		isRest:           true,
+		tasks:            []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	model := result.(Model)
+
+	if model.totalRested != 3*time.Minute {
+		t.Errorf("Expected 3m partial rest tracked, got %v", model.totalRested)
+	}
+	if model.isRest {
+		t.Error("Expected to transition to work phase after skipping rest")
 	}
 }

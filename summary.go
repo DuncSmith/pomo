@@ -10,16 +10,10 @@ import (
 
 )
 
-func printSummary(m Model) {
-	fmt.Println("\n📊 Session Summary")
-	fmt.Printf("  Intervals completed: %d\n", m.intervalsCompleted)
-	fmt.Printf("  Total worked: %s\n", formatDurationHuman(m.totalWorked))
-	fmt.Printf("  Total rested: %s\n", formatDurationHuman(m.totalRested))
-	fmt.Printf("  Interval: %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes())
-
-	// Compute per-task totals from the tasks slice
-	taskTotals := make(map[string]time.Duration)
-	for _, t := range m.tasks {
+// computeTaskTotals aggregates task durations by name, sorted alphabetically.
+func computeTaskTotals(tasks []Task) (map[string]time.Duration, []string) {
+	totals := make(map[string]time.Duration)
+	for _, t := range tasks {
 		if t.Name == "" {
 			continue
 		}
@@ -27,20 +21,28 @@ func printSummary(m Model) {
 		if end.IsZero() {
 			end = time.Now()
 		}
-		taskTotals[t.Name] += end.Sub(t.StartedAt)
+		totals[t.Name] += end.Sub(t.StartedAt)
 	}
+	names := make([]string, 0, len(totals))
+	for name := range totals {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return totals, names
+}
 
-	if len(taskTotals) > 0 {
+func printSummary(m Model) {
+	fmt.Println("\n📊 Session Summary")
+	fmt.Printf("  Intervals completed: %d\n", m.intervalsCompleted)
+	fmt.Printf("  Total worked: %s\n", formatDurationHuman(m.totalWorked))
+	fmt.Printf("  Total rested: %s\n", formatDurationHuman(m.totalRested))
+	fmt.Printf("  Interval: %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes())
+
+	totals, names := computeTaskTotals(m.tasks)
+	if len(totals) > 0 {
 		fmt.Println("\n  Tasks:")
-
-		names := make([]string, 0, len(taskTotals))
-		for name := range taskTotals {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
 		for _, name := range names {
-			fmt.Printf("    - %s: %s\n", name, formatDurationHuman(taskTotals[name]))
+			fmt.Printf("    - %s: %s\n", name, formatDurationHuman(totals[name]))
 		}
 	}
 }
@@ -82,30 +84,11 @@ func writeSummaryFile(m Model, cfg Config) error {
 	sb.WriteString(fmt.Sprintf("- **Total rested:** %s\n", formatDurationHuman(m.totalRested)))
 	sb.WriteString(fmt.Sprintf("- **Interval:** %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes()))
 
-	// Compute per-task totals
-	taskTotals := make(map[string]time.Duration)
-	for _, t := range m.tasks {
-		if t.Name == "" {
-			continue
-		}
-		end := t.EndedAt
-		if end.IsZero() {
-			end = time.Now()
-		}
-		taskTotals[t.Name] += end.Sub(t.StartedAt)
-	}
-
-	if len(taskTotals) > 0 {
+	totals, names := computeTaskTotals(m.tasks)
+	if len(totals) > 0 {
 		sb.WriteString("\n## Tasks\n\n")
-
-		names := make([]string, 0, len(taskTotals))
-		for name := range taskTotals {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-
 		for _, name := range names {
-			sb.WriteString(fmt.Sprintf("- **%s:** %s\n", name, formatDurationHuman(taskTotals[name])))
+			sb.WriteString(fmt.Sprintf("- **%s:** %s\n", name, formatDurationHuman(totals[name])))
 		}
 	}
 

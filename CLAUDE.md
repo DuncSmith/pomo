@@ -37,23 +37,23 @@ go mod download              # Download dependencies
 
 ### Core Structure
 - **Multi-file architecture**: Code is organized by concern across files, all in `package main`
-  - `main.go` (~290 lines) — Bubbletea `Model`, `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`
-  - `config.go` (~85 lines) — `Config` type, YAML config loading/writing
-  - `cli.go` (~110 lines) — Version vars, `parseArgsResult`, argument parsing, help text
-  - `summary.go` (~100 lines) — Session summary output (terminal + Markdown file), `formatDurationHuman`
-  - `notification.go` (~25 lines) — Desktop notifications (macOS/Linux)
-- **Bubbletea TUI Framework**: Elm Architecture pattern (Model / Update / View)
-- **Bubbles Components**: Official `progress.Model` component for the gradient progress bar
+  - `main.go` (~406 lines) — Bubbletea `Model`, `Init`/`Update`/`View`, phase transitions, task tracking, input handlers, `formatTime`
+  - `config.go` (~92 lines) — `Config` type, YAML config loading/writing
+  - `cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
+  - `summary.go` (~145 lines) — Session summary output (terminal + Markdown file), `buildFrontmatter`, `formatDurationHuman`
+  - `notification.go` (~29 lines) — Desktop notifications (macOS/Linux)
+- **Bubbletea TUI Framework**: Elm Architecture pattern (Model / Update / View); uses `charm.land/bubbletea/v2` and `charm.land/bubbles/v2` (not the `github.com/charmbracelet` paths)
+- **Bubbles Components**: Official `progress.Model` component for the gradient progress bar (`progress.WithDefaultBlend()`)
 
 ### Types
 
 **`Config`** — User preferences loaded from `~/.config/pomo/config.yaml` (XDG-compliant):
-- `WorkTime` (default `50`): Default work phase minutes
-- `IntervalTime` (default `60`): Default total interval minutes
-- `SessionSummary` (nested block):
-  - `Create` (default `true`): Whether to write a Markdown summary file on quit
-  - `Folder` (default `"~/pomos"`): Where to write Markdown session summaries
-  - `Tags` (default `nil`, resolves to `["daily", "pomo summary"]`): Custom tags for the YAML frontmatter block. Explicit `[]` omits the `tags` key entirely.
+- `WorkTime` (YAML: `work_time`, default `50`): Default work phase minutes
+- `IntervalTime` (YAML: `interval_time`, default `60`): Default total interval minutes
+- `SessionSummary` (YAML: `session_summary`, nested block via `SessionSummary` type):
+  - `Create` (YAML: `create_session_summary`, default `true`): Whether to write a Markdown summary file on quit
+  - `Folder` (YAML: `summary_folder`, default `"~/pomos"`): Where to write Markdown session summaries
+  - `Tags` (YAML: `summary_tags`, default `["daily", "pomo summary"]`): Custom tags for the YAML frontmatter block. Set by `defaultConfig()` and preserved as the YAML unmarshal default when the field is omitted. An explicit `[]` in config omits the `tags` key in the frontmatter entirely.
 
 **`Model`** — Central Bubbletea state:
 - `workDuration`, `restDuration`, `intervalDuration`: Phase configuration
@@ -85,7 +85,8 @@ go mod download              # Download dependencies
 **Bubbletea lifecycle**:
 - `Init()`: Returns `tickCmd()` to start the 1-second tick loop
 - `Update()`: Dispatches on message type; delegates to `handleNamingInput()` / `handleTaskInput()` when those modes are active
-- `View()`: Renders naming/task prompts, or the main timer UI (header, interval name, countdown, progress bar, active task, key hints)
+- `View()`: Returns `tea.View` (via `tea.NewView()`); renders naming/task prompts, or the main timer UI (header, interval name, countdown, progress bar, active task, key hints)
+- `phaseDuration()`: Returns `workDuration` or `restDuration` based on `isRest`
 
 **Phase transitions**:
 - `transitionToRest(elapsed)`: Accumulates work time, sets `isRest=true`, ends active task
@@ -108,11 +109,13 @@ go mod download              # Download dependencies
 
 **Output**:
 - `printSummary(m)`: Prints intervals completed, total work/rest, and per-task time (aggregated by name) to stdout
-- `writeSummaryFile(m, cfg)`: Writes the same content as a Markdown file to `cfg.SummaryFolder/<startedAt>.md`
+- `writeSummaryFile(m, cfg)`: Writes the same content as a Markdown file to `cfg.SummaryFolder/<startedAt>.md`; skips if `cfg.SessionSummary.Create` is false
+- `buildFrontmatter(tags, created)`: Builds the YAML frontmatter block (`---\ncreated: …\ntags:\n  - …\n---`) for the Markdown summary; omits `tags` key when the slice is empty
 - `formatTime(d)`: Formats duration as `"MM:SS"` (hours overflow into minutes)
 - `formatDurationHuman(d)`: Human-readable format (`"Xh Ym"`, `"Xm Ys"`, `"Xs"`)
 
 **Config**:
+- `defaultConfig()`: Returns the built-in default `Config` struct (used as unmarshal base and fallback)
 - `loadConfig()`: Reads YAML config; on first run, writes defaults to disk via `writeDefaultConfig()` and returns defaults
 - `configPath()`: Resolves `$XDG_CONFIG_HOME/pomo/config.yaml` or `~/.config/pomo/config.yaml`
 
@@ -122,12 +125,14 @@ go mod download              # Download dependencies
 ### Command Line Interface
 
 ```
-pomo [duration] [--interval duration] [-h|--help] [-v|--version]
+pomo [duration] [--interval duration] [--create-session-summary|--no-create-session-summary] [-h|--help] [-v|--version]
 ```
 
 Duration formats: `30` (minutes), `30m`, `30s`. Defaults come from config file.
 
 Validation: work > 0, interval > 0, work < interval. Rest = interval − work.
+
+The `--create-session-summary` / `--no-create-session-summary` flags override `cfg.SessionSummary.Create` for that run only; omitting them leaves the config value unchanged. The override is stored as `*bool` in `parseArgsResult` (nil = use config).
 
 ### Keyboard Controls
 
@@ -144,8 +149,8 @@ Validation: work > 0, interval > 0, work < interval. Rest = interval − work.
 
 ### Testing Strategy
 
-- ~30 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
-- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation
+- ~34 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
+- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation
 
 ### Progress Bar Implementation
 
