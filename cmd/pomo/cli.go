@@ -111,25 +111,26 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 }
 
 func showHelp() {
-	fmt.Println("Usage: pomo [duration] [--interval duration]")
+	fmt.Println("Usage: pomo [work] [--interval duration]")
 	fmt.Println()
 	fmt.Println("Runs repeating work/rest intervals until you quit.")
+	fmt.Println("Rest time is always interval − work and cannot be set directly.")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  pomo          # 50m work, 10m rest (60m interval)")
-	fmt.Println("  pomo 25       # 25m work, 35m rest (60m interval)")
-	fmt.Println("  pomo 25m      # 25m work, 35m rest (60m interval)")
-	fmt.Println("  pomo 30s      # 30s work timer (60m interval)")
-	fmt.Println("  pomo 45 -i 90 # 45m work, 45m rest (90m interval)")
+	fmt.Println("  pomo          # 50m work (10m rest)")
+	fmt.Println("  pomo 25       # 25m work (35m rest)")
+	fmt.Println("  pomo 25m      # 25m work (35m rest)")
+	fmt.Println("  pomo 30s      # 30s work (59m30s rest)")
+	fmt.Println("  pomo 45 -i 90 # 45m work, 90m interval (45m rest)")
 	fmt.Println()
 	fmt.Println("Options:")
-	fmt.Println("  -i, --interval              Set interval duration (default: 60m)")
+	fmt.Println("  -i, --interval              Set total interval duration; rest = interval − work (default: 60m)")
 	fmt.Println("      --create-session-summary    Write a Markdown summary on quit (default: true)")
 	fmt.Println("      --no-create-session-summary Disable writing the Markdown summary")
 	fmt.Println("  -v, --version               Show version information")
 	fmt.Println("  -h, --help                  Show this help")
 	fmt.Println()
-	fmt.Println("Default: 50m work, 10m rest (60m interval)")
+	fmt.Println("Default: 50m work (10m rest, 60m interval)")
 }
 
 func parseDuration(arg string) (time.Duration, error) {

@@ -37,18 +37,20 @@ bin/build
 
 ### Basic Usage
 ```bash
-# Start with defaults: 50m work, 10m rest (60m interval), repeating
+# Start with defaults: 50m work (10m rest), repeating
 ./pomo
 
-# Custom work duration (rest fills remainder of 60m interval)
-./pomo 25            # 25m work, 35m rest
-./pomo 30m           # 30m work, 30m rest
-./pomo 90s           # 90s work, 58m30s rest
+# Custom work duration (rest = 60m interval − work)
+./pomo 25            # 25m work (35m rest)
+./pomo 30m           # 30m work (30m rest)
+./pomo 90s           # 90s work (58m30s rest)
 
-# Custom interval duration
-./pomo 45 --interval 90   # 45m work, 45m rest (90m interval)
-./pomo -i 90              # 50m work, 40m rest (90m interval)
+# Custom interval duration (rest = interval − work)
+./pomo 45 --interval 90   # 45m work, 90m interval (45m rest)
+./pomo -i 90              # 50m work, 90m interval (40m rest)
 ```
+
+Rest time is always derived as **interval − work** and cannot be set directly.
 
 The timer runs work → rest → work → rest continuously until you quit.
 On exit, a session summary shows:
