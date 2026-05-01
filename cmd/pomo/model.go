@@ -100,12 +100,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "s":
 			now := time.Now()
 			elapsed := m.phaseDuration() - m.remaining
+			wasRest := m.isRest
 			if m.isRest {
 				m = m.transitionToWork(elapsed, now)
 			} else {
 				m = m.transitionToRest(elapsed, now)
 			}
-			go sendNotification(m.isRest, m.currentIntervalName)
+			go sendNotification(wasRest, m.currentIntervalName)
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
