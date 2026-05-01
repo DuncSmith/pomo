@@ -89,6 +89,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 	}
 
 	restDuration := intervalDuration - workDuration
+	lunchDuration := time.Duration(cfg.LunchTime) * time.Minute
 
 	p := progress.New(progress.WithDefaultBlend())
 	now := time.Now()
@@ -96,6 +97,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		workDuration:        workDuration,
 		restDuration:        restDuration,
 		intervalDuration:    intervalDuration,
+		lunchDuration:       lunchDuration,
 		remaining:           workDuration,
 		isRest:              false,
 		progress:            &p,

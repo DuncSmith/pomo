@@ -6,6 +6,9 @@ import (
 )
 
 func (m Model) phaseDuration() time.Duration {
+	if m.isLunch {
+		return m.lunchDuration
+	}
 	if m.isRest {
 		return m.restDuration
 	}
@@ -38,11 +41,23 @@ func (m Model) transitionToRest(elapsed time.Duration, now time.Time) Model {
 	return m
 }
 
-// transitionToWork transitions from rest to work phase.
+// transitionToLunch transitions from work to a lunch break.
+func (m Model) transitionToLunch(elapsed time.Duration, now time.Time) Model {
+	m.totalWorked += elapsed
+	m.isRest = true
+	m.isLunch = true
+	m.remaining = m.lunchDuration
+	m.endActiveTask(now)
+	return m
+}
+
+// transitionToWork transitions from rest (or lunch) to work phase.
 func (m Model) transitionToWork(elapsed time.Duration, now time.Time) Model {
 	m.totalRested += elapsed
 	m.intervalsCompleted++
 	m.isRest = false
+	m.isLunch = false
+	m.lunchReady = false
 	m.remaining = m.workDuration
 	// Generate a fresh interval name — no carry-over
 	m.currentIntervalName = generateIntervalName(m.intervalsCompleted+1, now)

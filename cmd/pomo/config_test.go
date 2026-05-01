@@ -17,6 +17,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.IntervalTime != 60 {
 		t.Errorf("Expected IntervalTime 60, got %d", cfg.IntervalTime)
 	}
+	if cfg.LunchTime != 60 {
+		t.Errorf("Expected LunchTime 60, got %d", cfg.LunchTime)
+	}
 	if !cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be true by default")
 	}

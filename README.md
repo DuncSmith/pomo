@@ -65,6 +65,7 @@ On exit, a session summary shows:
 - `n` - Name current work interval (press again to rename)
 - `a` - Add or switch current task (work phase only)
 - `s` - Skip current phase (work → rest or rest → work)
+- `l` - Take a lunch break (work phase only)
 
 ### Interval Naming
 During work phases, press `n` to give a name to your current interval. This name will be:
@@ -81,6 +82,22 @@ Example usage:
 # The interval will be named "Email cleanup"
 # After break, next work interval will inherit "Email cleanup"
 # Press 'n' again to rename if needed
+```
+
+### Lunch Breaks
+
+During a work phase, press `l` to take a lunch break. This ends the current work interval early and starts a special lunch timer (default: 60 minutes).
+
+When the lunch timer expires, the app pauses and waits — it won't automatically start the next interval.
+
+Press `Enter` or `Space` when you're ready and a new work interval begins, with your previous task automatically resumed.
+
+You can also skip lunch early with `s`, or pause/resume it with `Space` like any other phase.
+
+**Configure the lunch duration** in `~/.config/pomo/config.yaml`:
+
+```yaml
+lunch_time: 60   # minutes (default: 60)
 ```
 
 ### Tracking Tasks
@@ -128,6 +145,7 @@ The summary contains:
 ```yaml
 work_time: 50
 interval_time: 60
+lunch_time: 60
 session_summary:
   create_session_summary: true
   summary_folder: ~/pomos

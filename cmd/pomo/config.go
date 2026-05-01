@@ -19,6 +19,7 @@ type SessionSummary struct {
 type Config struct {
 	WorkTime       int            `yaml:"work_time"`
 	IntervalTime   int            `yaml:"interval_time"`
+	LunchTime      int            `yaml:"lunch_time"`
 	SessionSummary SessionSummary `yaml:"session_summary"`
 }
 
@@ -27,6 +28,7 @@ func defaultConfig() Config {
 	return Config{
 		WorkTime:     50,
 		IntervalTime: 60,
+		LunchTime:    60,
 		SessionSummary: SessionSummary{
 			Create: true,
 			Folder: "~/pomos",

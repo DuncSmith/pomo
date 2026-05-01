@@ -6,9 +6,12 @@ import (
 	"runtime"
 )
 
-func sendNotification(isRest bool, intervalName string) {
+func sendNotification(isRest bool, isLunch bool, intervalName string) {
 	var title, message string
-	if isRest {
+	if isLunch {
+		title = "🥪 Lunch Break"
+		message = "Lunch is over! Ready to resume?"
+	} else if isRest {
 		title = "☕ Break Timer"
 		message = "Your break is complete!"
 	} else {

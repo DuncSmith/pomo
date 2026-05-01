@@ -23,8 +23,11 @@ type Model struct {
 	workDuration        time.Duration
 	restDuration        time.Duration
 	intervalDuration    time.Duration
+	lunchDuration       time.Duration
 	remaining           time.Duration
 	isRest              bool
+	isLunch             bool
+	lunchReady          bool
 	paused              bool
 	intervalsCompleted  int
 	totalWorked         time.Duration
@@ -70,6 +73,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if m.lunchReady {
+			switch msg.String() {
+			case "space", "enter":
+				now := time.Now()
+				m = m.transitionToWork(m.lunchDuration, now)
+				return m, tickCmd()
+			case "q", "ctrl+c":
+				// fall through to quit handler below
+			default:
+				return m, nil
+			}
+		}
 		switch msg.String() {
 		case "q", "ctrl+c":
 			elapsed := m.phaseDuration() - m.remaining
@@ -97,16 +112,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.taskInput = ""
 			}
 			return m, nil
+		case "l":
+			if !m.isRest {
+				now := time.Now()
+				elapsed := m.workDuration - m.remaining
+				m = m.transitionToLunch(elapsed, now)
+				return m, nil
+			}
+			return m, nil
 		case "s":
 			now := time.Now()
 			elapsed := m.phaseDuration() - m.remaining
 			wasRest := m.isRest
+			wasLunch := m.isLunch
 			if m.isRest {
 				m = m.transitionToWork(elapsed, now)
 			} else {
 				m = m.transitionToRest(elapsed, now)
 			}
-			go sendNotification(wasRest, m.currentIntervalName)
+			go sendNotification(wasRest, wasLunch, m.currentIntervalName)
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
@@ -135,12 +159,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case finishedMsg:
 		now := time.Now()
 		wasRest := m.isRest
-		if m.isRest {
+		wasLunch := m.isLunch
+		if m.isLunch {
+			m.lunchReady = true
+			go sendNotification(wasRest, wasLunch, m.currentIntervalName)
+			return m, nil
+		} else if m.isRest {
 			m = m.transitionToWork(m.restDuration, now)
 		} else {
 			m = m.transitionToRest(m.workDuration, now)
 		}
-		go sendNotification(wasRest, m.currentIntervalName)
+		go sendNotification(wasRest, wasLunch, m.currentIntervalName)
 		return m, tickCmd()
 	}
 	return m, nil
@@ -152,6 +181,14 @@ func (m Model) View() tea.View {
 	if m.namingMode {
 		s.WriteString(fmt.Sprintf("Rename interval: %s_\n", m.nameInput))
 		s.WriteString("\n[enter] confirm   [esc] cancel\n")
+		return tea.NewView(s.String())
+	}
+
+	if m.lunchReady {
+		s.WriteString("🥪 Lunch Break\n\n")
+		s.WriteString("Lunch is over!\n\n")
+		s.WriteString("Press [enter] or [space] to resume work\n")
+		s.WriteString("[q] to quit\n")
 		return tea.NewView(s.String())
 	}
 
@@ -172,7 +209,10 @@ func (m Model) View() tea.View {
 	emoji := "🍅"
 	title := "Pomodoro Timer"
 
-	if m.isRest {
+	if m.isLunch {
+		emoji = "🥪"
+		title = "Lunch Break"
+	} else if m.isRest {
 		emoji = "☕"
 		title = "Break Timer"
 	}
@@ -184,7 +224,13 @@ func (m Model) View() tea.View {
 		currentName = generateIntervalName(intervalNum, time.Now())
 	}
 
-	if phaseDur < time.Minute {
+	if m.isLunch {
+		if phaseDur < time.Minute {
+			s.WriteString(fmt.Sprintf("%s %s (%d seconds)\n", emoji, title, int(phaseDur.Seconds())))
+		} else {
+			s.WriteString(fmt.Sprintf("%s %s (%.0fm)\n", emoji, title, phaseDur.Minutes()))
+		}
+	} else if phaseDur < time.Minute {
 		s.WriteString(fmt.Sprintf("%s %s: %s (%d seconds)\n", emoji, title, currentName, int(phaseDur.Seconds())))
 	} else {
 		s.WriteString(fmt.Sprintf("%s %s: %s (%.0fm)\n", emoji, title, currentName, phaseDur.Minutes()))
@@ -224,7 +270,7 @@ func (m Model) View() tea.View {
 		if m.isRest {
 			s.WriteString("Press [s] to skip interval, [space] to pause/resume, [q] to quit\n")
 		} else {
-			s.WriteString("[n] rename interval  [s] skip interval  [a] add task\n")
+			s.WriteString("[n] rename interval  [s] skip interval  [a] add task  [l] lunch\n")
 			s.WriteString("[space] pause/resume  [q] quit\n")
 		}
 	}
