@@ -27,6 +27,9 @@ func main() {
 	case "version":
 		fmt.Println(result.versionInfo)
 		os.Exit(0)
+	case "report":
+		runReport(cfg, *result.reportArgs)
+		return
 	}
 
 	// CLI flag overrides config file value
@@ -47,6 +50,14 @@ func main() {
 		printSummary(m)
 		if err := writeSummaryFile(m, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not save summary file: %v\n", err)
+		}
+		if db, err := openDB(); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not open database: %v\n", err)
+		} else {
+			defer db.Close()
+			if _, err := insertSession(db, m); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: could not save session to database: %v\n", err)
+			}
 		}
 	}
 }

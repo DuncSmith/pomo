@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Working from a Plan
+
+When implementing from a plan file, work through every item in the Todo List in order — including documentation updates — before declaring the work done. Do not skip trailing phases (e.g. "Final checks", doc updates) because the code phases are complete.
+
 ## Project Overview
 
 A Pomodoro timer CLI application built with Go using the Bubbletea TUI framework. Features a terminal UI with visual progress bars, pause/resume, interval naming, task tracking, session summaries (terminal + Markdown file), and system notifications.
@@ -42,9 +46,11 @@ go mod download              # Download dependencies
   - `cmd/pomo/model.go` (~316 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, `formatTime`
   - `cmd/pomo/tasks.go` (~159 lines) — Task management (`activeTask`, `endActiveTask`, `startTask`, `recentTaskNames`), input handlers (`handleNamingInput`, `handleTaskInput`, `handleCategoryInput`)
   - `cmd/pomo/timer.go` (~74 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`)
-  - `cmd/pomo/config.go` (~124 lines) — `Config` type, YAML config loading/writing, `processCategories`
-  - `cmd/pomo/cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
+  - `cmd/pomo/config.go` — `Config` type, YAML config loading/writing, `processCategories`, `processWorkDays`
+  - `cmd/pomo/cli.go` — Version vars, `parseArgsResult`, `reportArgs`, argument parsing, help text
   - `cmd/pomo/summary.go` (~245 lines) — Session summary output (terminal + Markdown file), `groupTasksByCategory`, `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
+  - `cmd/pomo/db.go` — SQLite persistence (`dataPath`, `openDB`, `openDBAt`, `insertSession`); uses `modernc.org/sqlite` (pure Go, no CGO)
+  - `cmd/pomo/report.go` — `pomo report` subcommand (`resolveReportWindow`, `queryWeeklyTotals`, `printWeeklyReport`, `writeWeeklyReportFile`, `runReport`)
   - `cmd/pomo/notification.go` (~29 lines) — Desktop notifications (macOS/Linux)
 - **Bubbletea TUI Framework**: Elm Architecture pattern (Model / Update / View); uses `charm.land/bubbletea/v2` and `charm.land/bubbles/v2` (not the `github.com/charmbracelet` paths)
 - **Bubbles Components**: Official `progress.Model` component for the gradient progress bar (`progress.WithDefaultBlend()`)
@@ -59,6 +65,8 @@ go mod download              # Download dependencies
   - `Folder` (YAML: `summary_folder`, default `"~/pomos"`): Where to write Markdown session summaries
   - `Tags` (YAML: `summary_tags`, default `["daily", "pomo summary"]`): Custom tags for the YAML frontmatter block. Set by `defaultConfig()` and preserved as the YAML unmarshal default when the field is omitted. An explicit `[]` in config omits the `tags` key in the frontmatter entirely.
 - `Categories` (YAML: `categories`, default absent): Optional list of task category names. Absent or empty → category step is skipped entirely, preserving all prior behaviour. On first run, the config file is written with 6 built-in categories (`meeting`, `technical work`, `strategy work`, `meeting prep`, `121`, `chore`). At load time, entries are whitespace-trimmed and deduplicated; only the first 9 unique entries are used (excess logged to stderr).
+- `WeeklyReport` (YAML: `weekly_report`, nested block via `WeeklyReport` type):
+  - `WorkDays` (YAML: `work_days`, default `["Mon", "Tue", "Wed", "Thu", "Fri"]`): Which weekdays define the report window. Valid values: `Mon Tue Wed Thu Fri Sat Sun`. Invalid entries warn to stderr and are skipped; an empty result falls back to the Mon–Fri default.
 
 **`Model`** — Central Bubbletea state:
 - `workDuration`, `restDuration`, `intervalDuration`: Phase configuration
@@ -114,9 +122,10 @@ go mod download              # Download dependencies
 - `recentTaskNames(tasks)`: Walks `tasks` in reverse, deduplicates, excludes the active task, returns at most 9 names most-recent-first
 
 **CLI**:
-- `parseArgs(args, cfg)`: Parses positional work duration + `--interval`/`-i` flag; falls back to config values; validates constraints; handles `--help`/`-h` and `--version`/`-v`
+- `parseArgs(args, cfg)`: Parses positional work duration + `--interval`/`-i` flag; falls back to config values; validates constraints; handles `--help`/`-h`, `--version`/`-v`, and `report` subcommand
+- `parseReportArgs(args)`: Parses `--last`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`; validates mutual exclusion of `--last` and `--from`/`--to`; validates `--from ≤ --to`
 - `parseDuration(arg)`: Accepts `"30"`, `"30m"`, `"30s"`; bare integer = minutes
-- `showHelp()`: Prints usage, examples, and options
+- `showHelp()`: Prints usage, examples, and options including the `report` subcommand
 
 **Output**:
 - `printSummary(m)`: Prints intervals completed, total work/rest, and task time. When `m.categories` is non-empty, renders a grouped view (categories sorted by total duration desc, uncategorised last); otherwise renders the original flat list sorted alphabetically
@@ -130,8 +139,23 @@ go mod download              # Download dependencies
 **Config**:
 - `defaultConfig()`: Returns the built-in default `Config` struct (used as unmarshal base and fallback); `Categories` is nil so an absent `categories` key in existing configs does not activate the category step
 - `processCategories(cats)`: Trims whitespace, deduplicates (first-occurrence order), caps at 9 with a stderr warning; returns nil for empty input
-- `loadConfig()`: Reads YAML config; on first run, writes defaults plus `builtinCategories` to disk and returns that config; always runs `processCategories` on the loaded slice before returning
+- `processWorkDays(days)`: Trims whitespace, validates against the 7 weekday abbreviations, deduplicates; returns Mon–Fri default if result is empty
+- `loadConfig()`: Reads YAML config; on first run, writes defaults plus `builtinCategories` to disk and returns that config; always runs `processCategories` and `processWorkDays` on the loaded slices before returning
 - `configPath()`: Resolves `$XDG_CONFIG_HOME/pomo/config.yaml` or `~/.config/pomo/config.yaml`
+
+**Database** (`~/.local/share/pomo/pomo.db`, XDG-compliant; pure Go SQLite via `modernc.org/sqlite`):
+- `dataPath()`: Resolves `$XDG_DATA_HOME/pomo/pomo.db`, falling back to `~/.local/share/pomo/pomo.db`; creates the directory if absent
+- `openDB()`: Gets path from `dataPath()`, delegates to `openDBAt`
+- `openDBAt(path)`: Opens the SQLite file, runs `CREATE TABLE IF NOT EXISTS` for both tables, returns handle
+- `insertSession(db, m)`: Wraps session row + all completed tasks in a single transaction; skips tasks where `EndedAt.IsZero()`
+- Schema: `sessions` (1:1 with a pomo run) and `tasks` (linked by `session_id`); times stored as RFC3339 UTC strings; DB errors on quit are non-fatal warnings
+
+**Report**:
+- `resolveReportWindow(args, cfg, now)`: Computes `from`/`to` for the report; default = ISO Monday → last configured work day of current week; `--last` shifts back 7 days; `--from`/`--to` pass through (with end-of-day normalisation on `to`)
+- `queryWeeklyTotals(db, from, to)`: `SELECT category, SUM(duration) … GROUP BY category ORDER BY duration DESC`; moves uncategorised (`""`) to last in Go after SQL sort
+- `printWeeklyReport(totals, from, to)`: Prints header, 48-char separator, one row per category right-aligned to 48 chars, separator, total
+- `writeWeeklyReportFile(totals, from, to, cfg)`: Writes `~/pomos/week-YYYY-MM-DD.md` (idempotent; overwrites on re-run); uses `buildFrontmatter(["weekly-report", "pomo summary"], from)`
+- `runReport(cfg, args)`: Orchestrates `openDB` → `resolveReportWindow` → `queryWeeklyTotals` → `printWeeklyReport` → `writeWeeklyReportFile`; DB error here is fatal with a clear message pointing to the DB path
 
 **Notifications**:
 - `sendNotification(isRest, intervalName)`: macOS uses `terminal-notifier`; Linux uses `notify-send`; errors are non-fatal
@@ -140,6 +164,7 @@ go mod download              # Download dependencies
 
 ```
 pomo [duration] [--interval duration] [--create-session-summary|--no-create-session-summary] [-h|--help] [-v|--version]
+pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 ```
 
 Duration formats: `30` (minutes), `30m`, `30s`. Defaults come from config file.
@@ -147,6 +172,8 @@ Duration formats: `30` (minutes), `30m`, `30s`. Defaults come from config file.
 Validation: work > 0, interval > 0, work < interval. Rest = interval − work.
 
 The `--create-session-summary` / `--no-create-session-summary` flags override `cfg.SessionSummary.Create` for that run only; omitting them leaves the config value unchanged. The override is stored as `*bool` in `parseArgsResult` (nil = use config).
+
+Report flag validation: `--last` and `--from`/`--to` are mutually exclusive; `--to` requires `--from`; `--from` ≤ `--to`.
 
 ### Keyboard Controls
 
@@ -164,8 +191,10 @@ The `--create-session-summary` / `--no-create-session-summary` flags override `c
 
 ### Testing Strategy
 
-- ~44 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
+- ~55 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go`, `db_test.go`, `report_test.go` (white-box, `package main`)
 - Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation, recent task picker
+- DB tests: schema creation, round-trip session+task insert, active-task skipping, empty-task session
+- Report tests: window resolution (current week, last week, explicit range, custom work days), weekly total aggregation, uncategorised-last sort, filename format
 - Category behaviour degrades gracefully in all existing tests: models without `categories` set bypass `categoryMode` and exercise the original task flow unchanged
 
 ### Progress Bar Implementation

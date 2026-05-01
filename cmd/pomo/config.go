@@ -16,6 +16,11 @@ type SessionSummary struct {
 	Tags   []string `yaml:"summary_tags"`
 }
 
+// WeeklyReport holds configuration for the report subcommand.
+type WeeklyReport struct {
+	WorkDays []string `yaml:"work_days"`
+}
+
 // Config holds user preferences loaded from the YAML config file.
 type Config struct {
 	WorkTime       int            `yaml:"work_time"`
@@ -23,6 +28,7 @@ type Config struct {
 	LunchTime      int            `yaml:"lunch_time"`
 	SessionSummary SessionSummary `yaml:"session_summary"`
 	Categories     []string       `yaml:"categories"`
+	WeeklyReport   WeeklyReport   `yaml:"weekly_report"`
 }
 
 // builtinCategories are written to the config file on first run.
@@ -64,7 +70,43 @@ func defaultConfig() Config {
 			Folder: "~/pomos",
 			Tags:   []string{"daily", "pomo summary"},
 		},
+		WeeklyReport: WeeklyReport{
+			WorkDays: []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
+		},
 	}
+}
+
+// validWeekdays is the set of accepted weekday abbreviations.
+var validWeekdays = map[string]bool{
+	"Mon": true, "Tue": true, "Wed": true, "Thu": true,
+	"Fri": true, "Sat": true, "Sun": true,
+}
+
+// processWorkDays trims whitespace, validates, and deduplicates work day entries.
+// Returns the Mon–Fri default if the result would be empty.
+func processWorkDays(days []string) []string {
+	defaults := []string{"Mon", "Tue", "Wed", "Thu", "Fri"}
+	if len(days) == 0 {
+		return defaults
+	}
+	seen := make(map[string]bool)
+	var out []string
+	for _, d := range days {
+		d = strings.TrimSpace(d)
+		if !validWeekdays[d] {
+			fmt.Fprintf(os.Stderr, "warning: invalid work day %q (expected Mon–Sun), skipping\n", d)
+			continue
+		}
+		if seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	if len(out) == 0 {
+		return defaults
+	}
+	return out
 }
 
 // configPath returns the path to the config file, respecting XDG_CONFIG_HOME.
@@ -105,6 +147,7 @@ func loadConfig() (Config, error) {
 		return defaultConfig(), fmt.Errorf("could not parse config file %s: %w", path, err)
 	}
 	cfg.Categories = processCategories(cfg.Categories)
+	cfg.WeeklyReport.WorkDays = processWorkDays(cfg.WeeklyReport.WorkDays)
 	return cfg, nil
 }
 

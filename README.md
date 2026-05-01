@@ -15,6 +15,7 @@ Built using Claude Code.
 - ⚡ **Fast & Lightweight** - Single binary with no external dependencies
 - 🎨 **Responsive Design** - Automatically adjusts to your terminal width
 - 🏷️ **Task Categories** - Assign categories to tasks and see time grouped by category in your session summary
+- 📅 **Weekly Reports** - Query a category-time summary for any week with `pomo report`
 
 ## Installation
 
@@ -141,6 +142,40 @@ Task: write up quarterly notes  [strategy work]
 - When a new work interval starts after a break, the previous task name **and category** are carried over automatically.
 - Your session summary includes a breakdown of time spent on each task.
 
+### Weekly Reports
+
+After accumulating sessions, run `pomo report` to see a category-time breakdown for the current work week:
+
+```
+Weekly report  Mon 28 Apr – Fri 2 May
+────────────────────────────────────────────────
+technical work                          3h 20m
+strategy work                           1h 45m
+meeting                                 1h 10m
+meeting prep                              25m 0s
+uncategorised                             15m 0s
+────────────────────────────────────────────────
+Total                                   6h 55m
+```
+
+The report is also written to `~/pomos/week-YYYY-MM-DD.md` (the date is the Monday of the week), overwriting any previous run for the same week.
+
+```bash
+pomo report                              # current work week
+pomo report --last                       # previous work week
+pomo report --from 2025-04-21 --to 2025-04-25   # explicit date range
+pomo report --from 2025-04-21            # from that date to today
+```
+
+**Session data** is stored automatically in `~/.local/share/pomo/pomo.db` (XDG-compliant) every time you quit `pomo`. The daily Markdown summaries continue to be written exactly as before — the database is additive.
+
+**Configure the work week** in `~/.config/pomo/config.yaml`:
+
+```yaml
+weekly_report:
+  work_days: [Mon, Tue, Wed, Thu, Fri]   # default; any subset of Mon–Sun
+```
+
 ### Session Summaries
 
 When you quit `pomo`, it prints a terminal summary and optionally writes a Markdown file for your records.
@@ -197,6 +232,8 @@ categories:
   - meeting prep
   - 121
   - chore
+weekly_report:
+  work_days: [Mon, Tue, Wed, Thu, Fri]
 ```
 
 | Option | Description |
@@ -205,6 +242,7 @@ categories:
 | `summary_folder` | Directory for summary files (default: `~/pomos`) |
 | `summary_tags` | Custom tags for the frontmatter block. Omit to use defaults. Set to `[]` to omit the `tags` key entirely. |
 | `categories` | List of task categories (up to 9). Omit or leave empty to disable the category step entirely. New installs include the defaults shown above. |
+| `weekly_report.work_days` | Weekdays that define the report window (default: `[Mon, Tue, Wed, Thu, Fri]`). Valid values: `Mon Tue Wed Thu Fri Sat Sun`. |
 
 You can also toggle summaries from the command line:
 ```bash

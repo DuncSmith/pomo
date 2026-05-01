@@ -16,12 +16,20 @@ var (
 	date    = "unknown"
 )
 
+// reportArgs holds parsed flags for the report subcommand.
+type reportArgs struct {
+	Last bool
+	From *time.Time
+	To   *time.Time
+}
+
 // parseArgsResult represents the result of parsing command-line arguments
 type parseArgsResult struct {
 	model                *Model
-	action               string // "", "help", or "version"
+	action               string // "", "help", "version", or "report"
 	versionInfo          string
 	createSessionSummary *bool // nil means "use config value"
+	reportArgs           *reportArgs
 }
 
 func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
@@ -33,6 +41,14 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 			info := fmt.Sprintf("pomo %s (commit: %s, built: %s)", version, commit, date)
 			return &parseArgsResult{action: "version", versionInfo: info}, nil
 		}
+	}
+
+	if len(args) > 0 && args[0] == "report" {
+		rArgs, err := parseReportArgs(args[1:])
+		if err != nil {
+			return nil, err
+		}
+		return &parseArgsResult{action: "report", reportArgs: rArgs}, nil
 	}
 
 	var workDuration time.Duration
@@ -114,25 +130,79 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 
 func showHelp() {
 	fmt.Println("Usage: pomo [work] [--interval duration]")
+	fmt.Println("       pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 	fmt.Println()
 	fmt.Println("Runs repeating work/rest intervals until you quit.")
 	fmt.Println("Rest time is always interval − work and cannot be set directly.")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  pomo          # 50m work (10m rest)")
-	fmt.Println("  pomo 25       # 25m work (35m rest)")
-	fmt.Println("  pomo 25m      # 25m work (35m rest)")
-	fmt.Println("  pomo 30s      # 30s work (59m30s rest)")
-	fmt.Println("  pomo 45 -i 90 # 45m work, 90m interval (45m rest)")
+	fmt.Println("  pomo               # 50m work (10m rest)")
+	fmt.Println("  pomo 25            # 25m work (35m rest)")
+	fmt.Println("  pomo 25m           # 25m work (35m rest)")
+	fmt.Println("  pomo 30s           # 30s work (59m30s rest)")
+	fmt.Println("  pomo 45 -i 90      # 45m work, 90m interval (45m rest)")
+	fmt.Println("  pomo report        # weekly category summary (current week)")
+	fmt.Println("  pomo report --last # previous week")
 	fmt.Println()
-	fmt.Println("Options:")
+	fmt.Println("Timer options:")
 	fmt.Println("  -i, --interval              Set total interval duration; rest = interval − work (default: 60m)")
 	fmt.Println("      --create-session-summary    Write a Markdown summary on quit (default: true)")
 	fmt.Println("      --no-create-session-summary Disable writing the Markdown summary")
+	fmt.Println()
+	fmt.Println("Report options:")
+	fmt.Println("      --last          Show previous work week instead of current")
+	fmt.Println("      --from DATE     Start date (YYYY-MM-DD)")
+	fmt.Println("      --to DATE       End date (YYYY-MM-DD; defaults to today when omitted)")
+	fmt.Println()
+	fmt.Println("General options:")
 	fmt.Println("  -v, --version               Show version information")
 	fmt.Println("  -h, --help                  Show this help")
 	fmt.Println()
 	fmt.Println("Default: 50m work (10m rest, 60m interval)")
+}
+
+func parseReportArgs(args []string) (*reportArgs, error) {
+	result := &reportArgs{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--last":
+			result.Last = true
+		case "--from":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--from requires a date (YYYY-MM-DD)")
+			}
+			t, err := time.Parse("2006-01-02", args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid --from date %q (expected YYYY-MM-DD)", args[i+1])
+			}
+			result.From = &t
+			i++
+		case "--to":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--to requires a date (YYYY-MM-DD)")
+			}
+			t, err := time.Parse("2006-01-02", args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid --to date %q (expected YYYY-MM-DD)", args[i+1])
+			}
+			result.To = &t
+			i++
+		default:
+			return nil, fmt.Errorf("unknown report flag: %s", args[i])
+		}
+	}
+
+	if result.Last && (result.From != nil || result.To != nil) {
+		return nil, fmt.Errorf("--last cannot be used with --from or --to")
+	}
+	if result.To != nil && result.From == nil {
+		return nil, fmt.Errorf("--to requires --from")
+	}
+	if result.From != nil && result.To != nil && result.From.After(*result.To) {
+		return nil, fmt.Errorf("--from must be on or before --to")
+	}
+
+	return result, nil
 }
 
 func parseDuration(arg string) (time.Duration, error) {
