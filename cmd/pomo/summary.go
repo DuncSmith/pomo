@@ -7,8 +7,93 @@ import (
 	"sort"
 	"strings"
 	"time"
-
 )
+
+type taskSummary struct {
+	name  string
+	total time.Duration
+}
+
+type categoryGroup struct {
+	category string
+	total    time.Duration
+	tasks    []taskSummary
+}
+
+// groupTasksByCategory groups tasks by category, sorted by total duration descending.
+// Uncategorised tasks (empty category) appear last.
+func groupTasksByCategory(tasks []Task) []categoryGroup {
+	type groupState struct {
+		tasks   []taskSummary
+		taskIdx map[string]int
+		total   time.Duration
+	}
+
+	stateMap := make(map[string]*groupState)
+	var order []string
+
+	for _, t := range tasks {
+		if t.Name == "" {
+			continue
+		}
+		end := t.EndedAt
+		if end.IsZero() {
+			end = time.Now()
+		}
+		dur := end.Sub(t.StartedAt)
+		cat := t.Category
+
+		if _, exists := stateMap[cat]; !exists {
+			stateMap[cat] = &groupState{taskIdx: make(map[string]int)}
+			order = append(order, cat)
+		}
+		gs := stateMap[cat]
+		gs.total += dur
+		if idx, exists := gs.taskIdx[t.Name]; exists {
+			gs.tasks[idx].total += dur
+		} else {
+			gs.taskIdx[t.Name] = len(gs.tasks)
+			gs.tasks = append(gs.tasks, taskSummary{name: t.Name, total: dur})
+		}
+	}
+
+	var groups []categoryGroup
+	for _, cat := range order {
+		gs := stateMap[cat]
+		groups = append(groups, categoryGroup{
+			category: cat,
+			total:    gs.total,
+			tasks:    gs.tasks,
+		})
+	}
+
+	sort.SliceStable(groups, func(i, j int) bool {
+		if groups[i].category == "" {
+			return false
+		}
+		if groups[j].category == "" {
+			return true
+		}
+		return groups[i].total > groups[j].total
+	})
+
+	return groups
+}
+
+// formatGroupHeader renders "category  ─────  duration" for terminal output.
+func formatGroupHeader(category string, total time.Duration) string {
+	name := category
+	if name == "" {
+		name = "uncategorised"
+	}
+	durStr := formatDurationHuman(total)
+	const width = 48
+	dashCount := width - len(name) - 4 - len(durStr)
+	if dashCount < 2 {
+		dashCount = 2
+	}
+	return fmt.Sprintf("%s  %s  %s", name, strings.Repeat("─", dashCount), durStr)
+}
 
 // computeTaskTotals aggregates task durations by name, sorted alphabetically.
 func computeTaskTotals(tasks []Task) (map[string]time.Duration, []string) {
@@ -38,11 +123,25 @@ func printSummary(m Model) {
 	fmt.Printf("  Total rested: %s\n", formatDurationHuman(m.totalRested))
 	fmt.Printf("  Interval: %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes())
 
-	totals, names := computeTaskTotals(m.tasks)
-	if len(totals) > 0 {
-		fmt.Println("\n  Tasks:")
-		for _, name := range names {
-			fmt.Printf("    - %s: %s\n", name, formatDurationHuman(totals[name]))
+	if len(m.categories) > 0 {
+		groups := groupTasksByCategory(m.tasks)
+		if len(groups) > 0 {
+			fmt.Println()
+			for _, g := range groups {
+				fmt.Printf("  %s\n", formatGroupHeader(g.category, g.total))
+				for _, ts := range g.tasks {
+					fmt.Printf("    %-40s  %s\n", ts.name, formatDurationHuman(ts.total))
+				}
+				fmt.Println()
+			}
+		}
+	} else {
+		totals, names := computeTaskTotals(m.tasks)
+		if len(totals) > 0 {
+			fmt.Println("\n  Tasks:")
+			for _, name := range names {
+				fmt.Printf("    - %s: %s\n", name, formatDurationHuman(totals[name]))
+			}
 		}
 	}
 }
@@ -84,11 +183,28 @@ func writeSummaryFile(m Model, cfg Config) error {
 	sb.WriteString(fmt.Sprintf("- **Total rested:** %s\n", formatDurationHuman(m.totalRested)))
 	sb.WriteString(fmt.Sprintf("- **Interval:** %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes()))
 
-	totals, names := computeTaskTotals(m.tasks)
-	if len(totals) > 0 {
-		sb.WriteString("\n## Tasks\n\n")
-		for _, name := range names {
-			sb.WriteString(fmt.Sprintf("- **%s:** %s\n", name, formatDurationHuman(totals[name])))
+	if len(m.categories) > 0 {
+		groups := groupTasksByCategory(m.tasks)
+		if len(groups) > 0 {
+			sb.WriteString("\n## Tasks\n")
+			for _, g := range groups {
+				catName := g.category
+				if catName == "" {
+					catName = "uncategorised"
+				}
+				sb.WriteString(fmt.Sprintf("\n**%s** (%s)\n", catName, formatDurationHuman(g.total)))
+				for _, ts := range g.tasks {
+					sb.WriteString(fmt.Sprintf("- %s: %s\n", ts.name, formatDurationHuman(ts.total)))
+				}
+			}
+		}
+	} else {
+		totals, names := computeTaskTotals(m.tasks)
+		if len(totals) > 0 {
+			sb.WriteString("\n## Tasks\n\n")
+			for _, name := range names {
+				sb.WriteString(fmt.Sprintf("- **%s:** %s\n", name, formatDurationHuman(totals[name])))
+			}
 		}
 	}
 

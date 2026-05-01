@@ -87,12 +87,18 @@ func (m Model) handleNamingInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 func (m Model) handleTaskInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch msg.Code {
 	case tea.KeyEnter:
-		if strings.TrimSpace(m.taskInput) != "" {
-			m.startTask(strings.TrimSpace(m.taskInput), time.Now())
-		}
+		name := strings.TrimSpace(m.taskInput)
 		m.taskMode = false
 		m.taskInput = ""
 		m.recentTasks = nil
+		if name != "" {
+			if len(m.categories) > 0 {
+				m.pendingTask = name
+				m.categoryMode = true
+			} else {
+				m.startTask(name, time.Now())
+			}
+		}
 	case tea.KeyEscape:
 		m.taskMode = false
 		m.taskInput = ""
@@ -108,15 +114,45 @@ func (m Model) handleTaskInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 			if d := msg.Text[0]; d >= '1' && d <= '9' {
 				idx := int(d-'0') - 1
 				if idx < len(m.recentTasks) {
-					m.startTask(m.recentTasks[idx], time.Now())
+					name := m.recentTasks[idx]
 					m.taskMode = false
 					m.recentTasks = nil
+					if len(m.categories) > 0 {
+						m.pendingTask = name
+						m.categoryMode = true
+					} else {
+						m.startTask(name, time.Now())
+					}
 					return m, nil
 				}
 			}
 		}
 		if msg.Text != "" {
 			m.taskInput += msg.Text
+		}
+	}
+	return m, nil
+}
+
+// handleCategoryInput processes keyboard input while in category mode (step 2 of task creation).
+func (m Model) handleCategoryInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
+	switch msg.Code {
+	case tea.KeyEscape:
+		m.categoryMode = false
+		m.pendingTask = ""
+	default:
+		if msg.Text == "0" {
+			m.startTask(m.pendingTask, time.Now())
+			m.categoryMode = false
+			m.pendingTask = ""
+		} else if len(msg.Text) == 1 && msg.Text[0] >= '1' && msg.Text[0] <= '9' {
+			idx := int(msg.Text[0]-'0') - 1
+			if idx < len(m.categories) {
+				m.startTask(m.pendingTask, time.Now())
+				m.tasks[len(m.tasks)-1].Category = m.categories[idx]
+				m.categoryMode = false
+				m.pendingTask = ""
+			}
 		}
 	}
 	return m, nil

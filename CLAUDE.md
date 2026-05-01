@@ -39,12 +39,12 @@ go mod download              # Download dependencies
 - **Layout**: `cmd/pomo/` holds all source; `go.mod` at repo root
 - **Multi-file architecture**: Code is organized by concern across files, all in `package main`
   - `cmd/pomo/main.go` (~47 lines) — `main()` entry point only
-  - `cmd/pomo/model.go` (~238 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, `formatTime`
-  - `cmd/pomo/tasks.go` (~123 lines) — Task management (`activeTask`, `endActiveTask`, `startTask`, `recentTaskNames`), input handlers (`handleNamingInput`, `handleTaskInput`)
-  - `cmd/pomo/timer.go` (~55 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`)
-  - `cmd/pomo/config.go` (~92 lines) — `Config` type, YAML config loading/writing
+  - `cmd/pomo/model.go` (~316 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, `formatTime`
+  - `cmd/pomo/tasks.go` (~159 lines) — Task management (`activeTask`, `endActiveTask`, `startTask`, `recentTaskNames`), input handlers (`handleNamingInput`, `handleTaskInput`, `handleCategoryInput`)
+  - `cmd/pomo/timer.go` (~74 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`)
+  - `cmd/pomo/config.go` (~124 lines) — `Config` type, YAML config loading/writing, `processCategories`
   - `cmd/pomo/cli.go` (~152 lines) — Version vars, `parseArgsResult`, argument parsing, help text
-  - `cmd/pomo/summary.go` (~155 lines) — Session summary output (terminal + Markdown file), `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
+  - `cmd/pomo/summary.go` (~245 lines) — Session summary output (terminal + Markdown file), `groupTasksByCategory`, `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
   - `cmd/pomo/notification.go` (~29 lines) — Desktop notifications (macOS/Linux)
 - **Bubbletea TUI Framework**: Elm Architecture pattern (Model / Update / View); uses `charm.land/bubbletea/v2` and `charm.land/bubbles/v2` (not the `github.com/charmbracelet` paths)
 - **Bubbles Components**: Official `progress.Model` component for the gradient progress bar (`progress.WithDefaultBlend()`)
@@ -58,6 +58,7 @@ go mod download              # Download dependencies
   - `Create` (YAML: `create_session_summary`, default `true`): Whether to write a Markdown summary file on quit
   - `Folder` (YAML: `summary_folder`, default `"~/pomos"`): Where to write Markdown session summaries
   - `Tags` (YAML: `summary_tags`, default `["daily", "pomo summary"]`): Custom tags for the YAML frontmatter block. Set by `defaultConfig()` and preserved as the YAML unmarshal default when the field is omitted. An explicit `[]` in config omits the `tags` key in the frontmatter entirely.
+- `Categories` (YAML: `categories`, default absent): Optional list of task category names. Absent or empty → category step is skipped entirely, preserving all prior behaviour. On first run, the config file is written with 6 built-in categories (`meeting`, `technical work`, `strategy work`, `meeting prep`, `121`, `chore`). At load time, entries are whitespace-trimmed and deduplicated; only the first 9 unique entries are used (excess logged to stderr).
 
 **`Model`** — Central Bubbletea state:
 - `workDuration`, `restDuration`, `intervalDuration`: Phase configuration
@@ -72,11 +73,14 @@ go mod download              # Download dependencies
 - `namingMode` / `nameInput`: State for the inline interval rename prompt
 - `taskMode` / `taskInput`: State for the inline task name input prompt
 - `recentTasks []string`: Recent unique task names populated when entering task mode; cleared on exit
+- `categoryMode bool` / `pendingTask string`: State for the category picker (step 2 of task creation); `pendingTask` holds the confirmed task name from step 1 until a category is selected or the step is cancelled
+- `categories []string`: Categories loaded from config, set in `main()` after parsing; nil/empty means category step is skipped
 - `tasks []Task`: Append-only log of all task records for the session
 - `startedAt`: Session start timestamp (used to name the summary file)
 
 **`Task`** — Named unit of work:
 - `Name string`: User-provided task name
+- `Category string`: Category assigned at creation; empty string means uncategorised
 - `StartedAt time.Time`: When this task entry began
 - `EndedAt time.Time`: When it ended; zero value means currently active
 
@@ -89,13 +93,13 @@ go mod download              # Download dependencies
 
 **Bubbletea lifecycle**:
 - `Init()`: Returns `tickCmd()` to start the 1-second tick loop
-- `Update()`: Dispatches on message type; delegates to `handleNamingInput()` / `handleTaskInput()` when those modes are active
-- `View()`: Returns `tea.View` (via `tea.NewView()`); renders naming/task prompts, or the main timer UI (header, interval name, countdown, progress bar, active task, key hints)
+- `Update()`: Dispatches on message type; delegates to `handleNamingInput()` / `handleTaskInput()` / `handleCategoryInput()` when those modes are active
+- `View()`: Returns `tea.View` (via `tea.NewView()`); renders naming/task/category prompts, or the main timer UI (header, interval name, countdown, progress bar, active task with optional `[category]` tag, key hints)
 - `phaseDuration()`: Returns `workDuration` or `restDuration` based on `isRest`
 
 **Phase transitions**:
-- `transitionToRest(elapsed, now)`: Accumulates `elapsed` work time, sets `isRest=true`, ends active task at `now`
-- `transitionToWork(elapsed, now)`: Accumulates `elapsed` rest time, increments counter, generates new interval name, continues last task name into a new Task entry
+- `transitionToRest(elapsed, now)`: Accumulates `elapsed` work time, sets `isRest=true`, ends active task at `now`, clears `categoryMode`/`pendingTask`
+- `transitionToWork(elapsed, now)`: Accumulates `elapsed` rest time, increments counter, generates new interval name, continues last task name **and category** into a new Task entry
 - `generateIntervalName(n, now)`: Produces `"Morning #N"` / `"Afternoon #N"` / `"Evening #N"` / `"Night #N"` based on time of day
 
 **Task tracking** (pointer receivers, mutate in place):
@@ -105,7 +109,8 @@ go mod download              # Download dependencies
 
 **Input modes**:
 - `handleNamingInput()`: Enter/Esc to commit/cancel; Backspace/Delete are UTF-8 rune-aware
-- `handleTaskInput()`: Enter/Esc to commit/cancel; when `taskInput` is empty a digit `1`–`9` selects from `recentTasks` (if in range) or falls through to free-text
+- `handleTaskInput()`: Enter/Esc to commit/cancel; when `taskInput` is empty a digit `1`–`9` selects from `recentTasks` (if in range) or falls through to free-text; if categories are configured, confirming a name transitions to `categoryMode` instead of immediately starting a task
+- `handleCategoryInput()`: Single-key selection — `[1]`–`[9]` pick a category, `[0]` assigns none, `[esc]` discards the pending task entirely (nothing added to task list)
 - `recentTaskNames(tasks)`: Walks `tasks` in reverse, deduplicates, excludes the active task, returns at most 9 names most-recent-first
 
 **CLI**:
@@ -114,15 +119,18 @@ go mod download              # Download dependencies
 - `showHelp()`: Prints usage, examples, and options
 
 **Output**:
-- `printSummary(m)`: Prints intervals completed, total work/rest, and per-task time (aggregated by name) to stdout
-- `writeSummaryFile(m, cfg)`: Writes the same content as a Markdown file to `cfg.SummaryFolder/<startedAt>.md`; skips if `cfg.SessionSummary.Create` is false
+- `printSummary(m)`: Prints intervals completed, total work/rest, and task time. When `m.categories` is non-empty, renders a grouped view (categories sorted by total duration desc, uncategorised last); otherwise renders the original flat list sorted alphabetically
+- `writeSummaryFile(m, cfg)`: Writes the same content as a Markdown file to `cfg.SummaryFolder/<startedAt>.md`; skips if `cfg.SessionSummary.Create` is false; grouped format uses `**category** (duration)` headers when categories are configured
+- `groupTasksByCategory(tasks)`: Returns `[]categoryGroup` (each with `category`, `total`, `tasks []taskSummary`), sorted by total desc with uncategorised (`""`) forced last; preserves per-category task insertion order
+- `formatGroupHeader(category, total)`: Renders `"category  ──────  duration"` using `─` (U+2500) to fill a fixed 48-char line width
 - `buildFrontmatter(tags, created)`: Builds the YAML frontmatter block (`---\ncreated: …\ntags:\n  - …\n---`) for the Markdown summary; omits `tags` key when the slice is empty
 - `formatTime(d)`: Formats duration as `"MM:SS"` (hours overflow into minutes)
 - `formatDurationHuman(d)`: Human-readable format (`"Xh Ym"`, `"Xm Ys"`, `"Xs"`)
 
 **Config**:
-- `defaultConfig()`: Returns the built-in default `Config` struct (used as unmarshal base and fallback)
-- `loadConfig()`: Reads YAML config; on first run, writes defaults to disk via `writeDefaultConfig()` and returns defaults
+- `defaultConfig()`: Returns the built-in default `Config` struct (used as unmarshal base and fallback); `Categories` is nil so an absent `categories` key in existing configs does not activate the category step
+- `processCategories(cats)`: Trims whitespace, deduplicates (first-occurrence order), caps at 9 with a stderr warning; returns nil for empty input
+- `loadConfig()`: Reads YAML config; on first run, writes defaults plus `builtinCategories` to disk and returns that config; always runs `processCategories` on the loaded slice before returning
 - `configPath()`: Resolves `$XDG_CONFIG_HOME/pomo/config.yaml` or `~/.config/pomo/config.yaml`
 
 **Notifications**:
@@ -150,13 +158,15 @@ The `--create-session-summary` / `--no-create-session-summary` flags override `c
 | `a` | Enter task mode (add/switch task; work phase only) |
 | `s` | Skip current phase immediately |
 | `Enter` | Confirm input (naming / task mode) |
-| `Esc` | Cancel input (naming / task mode) |
+| `Esc` | Cancel input (naming / task / category mode); at category step discards the pending task entirely |
 | `Backspace` / `Delete` | Remove last character (UTF-8 rune-aware) |
+| `0`–`9` | Category picker: `[1]`–`[9]` select a category, `[0]` assigns none (category mode only) |
 
 ### Testing Strategy
 
 - ~44 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go` (white-box, `package main`)
 - Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation, recent task picker
+- Category behaviour degrades gracefully in all existing tests: models without `categories` set bypass `categoryMode` and exercise the original task flow unchanged
 
 ### Progress Bar Implementation
 

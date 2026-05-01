@@ -38,6 +38,8 @@ func (m Model) transitionToRest(elapsed time.Duration, now time.Time) Model {
 	m.isRest = true
 	m.remaining = m.restDuration
 	m.endActiveTask(now)
+	m.categoryMode = false
+	m.pendingTask = ""
 	return m
 }
 
@@ -48,6 +50,8 @@ func (m Model) transitionToLunch(elapsed time.Duration, now time.Time) Model {
 	m.isLunch = true
 	m.remaining = m.lunchDuration
 	m.endActiveTask(now)
+	m.categoryMode = false
+	m.pendingTask = ""
 	return m
 }
 
@@ -61,10 +65,10 @@ func (m Model) transitionToWork(elapsed time.Duration, now time.Time) Model {
 	m.remaining = m.workDuration
 	// Generate a fresh interval name — no carry-over
 	m.currentIntervalName = generateIntervalName(m.intervalsCompleted+1, now)
-	// Continue the last task (if any) into this new interval
+	// Continue the last task (if any) into this new interval, carrying its category
 	if len(m.tasks) > 0 {
-		lastName := m.tasks[len(m.tasks)-1].Name
-		m.tasks = append(m.tasks, Task{Name: lastName, StartedAt: now})
+		last := m.tasks[len(m.tasks)-1]
+		m.tasks = append(m.tasks, Task{Name: last.Name, Category: last.Category, StartedAt: now})
 	}
 	return m
 }

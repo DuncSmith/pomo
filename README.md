@@ -14,6 +14,7 @@ Built using Claude Code.
 - 🔔 **Notifications** - Cross-platform system notifications when timers complete
 - ⚡ **Fast & Lightweight** - Single binary with no external dependencies
 - 🎨 **Responsive Design** - Automatically adjusts to your terminal width
+- 🏷️ **Task Categories** - Assign categories to tasks and see time grouped by category in your session summary
 
 ## Installation
 
@@ -115,8 +116,29 @@ Recent tasks:
 [1-9] resume   [type] new task   [esc] cancel
 ```
 
+If categories are configured (see below), a second step appears immediately after the task name is confirmed:
+
+```
+New task: write up quarterly notes
+
+Category:
+[1] meeting             [2] technical work   [3] strategy work
+[4] meeting prep        [5] 121              [6] chore
+[0] none
+
+[esc] cancel
+```
+
+Press a single key to select — no Enter needed. Press `0` for no category, or `Esc` to discard the task entirely.
+
+The active task is shown in the timer view. If it has a category, the category appears inline:
+
+```
+Task: write up quarterly notes  [strategy work]
+```
+
 - Tasks are automatically ended when a rest phase begins or when you switch to a new task.
-- When a new work interval starts after a break, the previous task name is carried over automatically.
+- When a new work interval starts after a break, the previous task name **and category** are carried over automatically.
 - Your session summary includes a breakdown of time spent on each task.
 
 ### Session Summaries
@@ -140,6 +162,22 @@ The summary contains:
 - Total time worked and rested
 - Per-task time breakdown (if tasks were tracked)
 
+When categories are configured, the task section is grouped by category, sorted by total time descending, with uncategorised tasks at the end:
+
+```
+  strategy work  ──────────────────  50m 0s
+    write up quarterly notes          25m 0s
+    review roadmap doc                25m 0s
+
+  technical work  ─────────────────  25m 0s
+    fix auth bug                      25m 0s
+
+  uncategorised  ──────────────────  10m 0s
+    random admin                      10m 0s
+```
+
+Without categories configured, the original flat task list is shown.
+
 **Configuration:** Add a `session_summary` block to your config file (`~/.config/pomo/config.yaml`):
 
 ```yaml
@@ -152,6 +190,13 @@ session_summary:
   summary_tags:
     - daily
     - pomo summary
+categories:
+  - meeting
+  - technical work
+  - strategy work
+  - meeting prep
+  - 121
+  - chore
 ```
 
 | Option | Description |
@@ -159,6 +204,7 @@ session_summary:
 | `create_session_summary` | Whether to write a Markdown file on quit (default: `true`) |
 | `summary_folder` | Directory for summary files (default: `~/pomos`) |
 | `summary_tags` | Custom tags for the frontmatter block. Omit to use defaults. Set to `[]` to omit the `tags` key entirely. |
+| `categories` | List of task categories (up to 9). Omit or leave empty to disable the category step entirely. New installs include the defaults shown above. |
 
 You can also toggle summaries from the command line:
 ```bash

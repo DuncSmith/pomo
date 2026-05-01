@@ -15,6 +15,7 @@ type finishedMsg struct{}
 // Task represents a named unit of work assigned to an interval.
 type Task struct {
 	Name      string
+	Category  string    // empty means uncategorised
 	StartedAt time.Time
 	EndedAt   time.Time // zero value means still active
 }
@@ -41,6 +42,9 @@ type Model struct {
 	taskMode            bool
 	taskInput           string
 	recentTasks         []string
+	categoryMode        bool
+	pendingTask         string
+	categories          []string
 	startedAt           time.Time
 }
 
@@ -68,6 +72,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.taskMode {
 		if kp, ok := msg.(tea.KeyPressMsg); ok {
 			return m.handleTaskInput(kp)
+		}
+	}
+
+	if m.categoryMode {
+		if kp, ok := msg.(tea.KeyPressMsg); ok {
+			return m.handleCategoryInput(kp)
 		}
 	}
 
@@ -206,6 +216,23 @@ func (m Model) View() tea.View {
 		return tea.NewView(s.String())
 	}
 
+	if m.categoryMode {
+		s.WriteString(fmt.Sprintf("New task: %s\n\n", m.pendingTask))
+		s.WriteString("Category:\n")
+		for i, cat := range m.categories {
+			s.WriteString(fmt.Sprintf("[%d] %-20s", i+1, cat))
+			if (i+1)%3 == 0 {
+				s.WriteString("\n")
+			}
+		}
+		if len(m.categories)%3 != 0 {
+			s.WriteString("\n")
+		}
+		s.WriteString("[0] none\n\n")
+		s.WriteString("[esc] cancel\n")
+		return tea.NewView(s.String())
+	}
+
 	emoji := "🍅"
 	title := "Pomodoro Timer"
 
@@ -260,7 +287,11 @@ func (m Model) View() tea.View {
 		// Show active task
 		if !m.isRest {
 			if t := m.activeTask(); t != nil {
-				s.WriteString(fmt.Sprintf("   Task: %s\n", t.Name))
+				if t.Category != "" {
+					s.WriteString(fmt.Sprintf("   Task: %s  [%s]\n", t.Name, t.Category))
+				} else {
+					s.WriteString(fmt.Sprintf("   Task: %s\n", t.Name))
+				}
 			} else {
 				s.WriteString("   Task: (none)\n")
 			}

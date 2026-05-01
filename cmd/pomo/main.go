@@ -34,6 +34,8 @@ func main() {
 		cfg.SessionSummary.Create = *result.createSessionSummary
 	}
 
+	result.model.categories = cfg.Categories
+
 	p := tea.NewProgram(*result.model)
 	finalModel, err := p.Run()
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,6 +22,35 @@ type Config struct {
 	IntervalTime   int            `yaml:"interval_time"`
 	LunchTime      int            `yaml:"lunch_time"`
 	SessionSummary SessionSummary `yaml:"session_summary"`
+	Categories     []string       `yaml:"categories"`
+}
+
+// builtinCategories are written to the config file on first run.
+var builtinCategories = []string{
+	"meeting", "technical work", "strategy work", "meeting prep", "121", "chore",
+}
+
+// processCategories trims whitespace, deduplicates, and caps at 9 entries.
+// Returns nil when the input is empty so callers can treat nil as "not configured".
+func processCategories(cats []string) []string {
+	if len(cats) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var out []string
+	for _, c := range cats {
+		c = strings.TrimSpace(c)
+		if c == "" || seen[c] {
+			continue
+		}
+		seen[c] = true
+		out = append(out, c)
+	}
+	if len(out) > 9 {
+		fmt.Fprintf(os.Stderr, "Warning: only the first 9 categories will be used (%d configured)\n", len(out))
+		out = out[:9]
+	}
+	return out
 }
 
 // defaultConfig returns the built-in default configuration.
@@ -59,10 +89,9 @@ func loadConfig() (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		// First run: write defaults to disk
 		cfg := defaultConfig()
+		cfg.Categories = processCategories(builtinCategories)
 		if writeErr := writeDefaultConfig(path, cfg); writeErr != nil {
-			// Non-fatal: warn but continue with defaults
 			fmt.Fprintf(os.Stderr, "Warning: could not create config file: %v\n", writeErr)
 		}
 		return cfg, nil
@@ -75,6 +104,7 @@ func loadConfig() (Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return defaultConfig(), fmt.Errorf("could not parse config file %s: %w", path, err)
 	}
+	cfg.Categories = processCategories(cfg.Categories)
 	return cfg, nil
 }
 
