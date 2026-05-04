@@ -34,7 +34,7 @@ type Config struct {
 
 // builtinCategories are written to the config file on first run.
 var builtinCategories = []string{
-	"meeting", "technical work", "strategy work", "meeting prep", "121", "chore",
+	"MEETING", "TECHNICAL WORK", "STRATEGY WORK", "MEETING PREP", "121", "CHORE",
 }
 
 // processCategories trims whitespace, deduplicates, and caps at 9 entries.
@@ -70,7 +70,7 @@ func defaultConfig() Config {
 		SessionSummary: SessionSummary{
 			Create: true,
 			Folder: "~/pomos",
-			Tags:   []string{"daily", "pomo summary"},
+			Tags:   []string{"daily", "pomo-summary"},
 		},
 		WeeklyReport: WeeklyReport{
 			WorkDays: []string{"Mon", "Tue", "Wed", "Thu", "Fri"},
