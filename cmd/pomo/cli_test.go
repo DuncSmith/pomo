@@ -125,6 +125,7 @@ func TestParseArgs(t *testing.T) {
 		workDuration time.Duration
 		restDuration time.Duration
 		intervalDur  time.Duration
+		autoStart    bool
 	}{
 		{
 			name:         "defaults (no args)",
@@ -167,6 +168,14 @@ func TestParseArgs(t *testing.T) {
 			workDuration: 45 * time.Minute,
 			restDuration: 45 * time.Minute,
 			intervalDur:  90 * time.Minute,
+		},
+		{
+			name:         "auto start work flag",
+			args:         []string{"--auto-start-work"},
+			workDuration: 50 * time.Minute,
+			restDuration: 10 * time.Minute,
+			intervalDur:  60 * time.Minute,
+			autoStart:    true,
 		},
 		{
 			name:         "interval with m suffix",
@@ -285,14 +294,18 @@ func TestParseArgs(t *testing.T) {
 			if m.intervalsCompleted != 0 {
 				t.Errorf("Expected intervalsCompleted to be 0, got %d", m.intervalsCompleted)
 			}
+			if m.autoStartWork != tt.autoStart {
+				t.Errorf("Expected autoStartWork %v, got %v", tt.autoStart, m.autoStartWork)
+			}
 		})
 	}
 }
 
 func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	cfg := Config{
-		WorkTime:     30,
-		IntervalTime: 75,
+		WorkTime:      30,
+		IntervalTime:  75,
+		AutoStartWork: true,
 		SessionSummary: SessionSummary{
 			Folder: "~/pomos",
 			Create: true,
@@ -310,6 +323,9 @@ func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	}
 	if result.model.restDuration != 45*time.Minute {
 		t.Errorf("Expected restDuration 45m (75-30), got %v", result.model.restDuration)
+	}
+	if !result.model.autoStartWork {
+		t.Error("Expected autoStartWork true from config")
 	}
 }
 

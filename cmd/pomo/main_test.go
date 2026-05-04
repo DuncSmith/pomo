@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,7 +62,6 @@ func TestFormatTime(t *testing.T) {
 	}
 }
 
-
 func TestPhaseDuration(t *testing.T) {
 	m := Model{
 		workDuration: 50 * time.Minute,
@@ -115,6 +115,7 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 		intervalDuration:   60 * time.Minute,
 		remaining:          0,
 		isRest:             true,
+		autoStartWork:      true,
 		intervalsCompleted: 0,
 		totalWorked:        50 * time.Minute,
 		tasks:              []Task{},
@@ -140,6 +141,55 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 	}
 }
 
+func TestPhaseTransitionRestWaitsForConfirmationByDefault(t *testing.T) {
+	m := Model{
+		workDuration:       50 * time.Minute,
+		restDuration:       10 * time.Minute,
+		intervalDuration:   60 * time.Minute,
+		remaining:          0,
+		isRest:             true,
+		intervalsCompleted: 0,
+		totalWorked:        50 * time.Minute,
+		tasks:              []Task{},
+	}
+
+	result, cmd := m.Update(finishedMsg{})
+	model := result.(Model)
+
+	if !model.isRest {
+		t.Error("Expected model to remain in rest phase while waiting for confirmation")
+	}
+	if !model.waitingForWorkStart {
+		t.Error("Expected waitingForWorkStart to be true")
+	}
+	if model.totalRested != 0 {
+		t.Errorf("Expected totalRested to stay 0 until work is confirmed, got %v", model.totalRested)
+	}
+	if cmd == nil {
+		t.Error("Expected tickCmd while waiting for confirmation")
+	}
+
+	model.restFinishedAt = time.Now().Add(-3 * time.Second)
+	result, cmd = model.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	model = result.(Model)
+
+	if model.isRest {
+		t.Error("Expected model to switch to work phase after keypress")
+	}
+	if model.waitingForWorkStart {
+		t.Error("Expected waitingForWorkStart to be false after keypress")
+	}
+	if model.intervalsCompleted != 1 {
+		t.Errorf("Expected 1 completed interval, got %d", model.intervalsCompleted)
+	}
+	if model.totalRested < 10*time.Minute+3*time.Second {
+		t.Errorf("Expected totalRested to include wait time, got %v", model.totalRested)
+	}
+	if cmd == nil {
+		t.Error("Expected tickCmd after confirming work start")
+	}
+}
+
 func TestQuitTracksPartialProgress(t *testing.T) {
 	m := Model{
 		workDuration:     50 * time.Minute,
@@ -158,6 +208,18 @@ func TestQuitTracksPartialProgress(t *testing.T) {
 	}
 	if model.totalWorked != 20*time.Minute {
 		t.Errorf("Expected 20m partial work tracked, got %v", model.totalWorked)
+	}
+}
+
+func TestViewShowsReadyToWorkPrompt(t *testing.T) {
+	m := Model{
+		isRest:              true,
+		waitingForWorkStart: true,
+	}
+
+	view := fmt.Sprintf("%v", m.View())
+	if !strings.Contains(view, "Press any key to begin work") {
+		t.Errorf("Expected ready-to-work prompt in view, got %q", view)
 	}
 }
 
@@ -508,8 +570,8 @@ func TestRecentTaskNamesMaxNine(t *testing.T) {
 func TestTaskPickerSelectByDigit(t *testing.T) {
 	now := time.Now()
 	m := Model{
-		taskMode: true,
-		taskInput: "",
+		taskMode:    true,
+		taskInput:   "",
 		recentTasks: []string{"task1", "task2"},
 		tasks: []Task{
 			{Name: "task1", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},

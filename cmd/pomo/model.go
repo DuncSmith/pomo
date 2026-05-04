@@ -15,7 +15,7 @@ type finishedMsg struct{}
 // Task represents a named unit of work assigned to an interval.
 type Task struct {
 	Name      string
-	Category  string    // empty means uncategorised
+	Category  string // empty means uncategorised
 	StartedAt time.Time
 	EndedAt   time.Time // zero value means still active
 }
@@ -45,6 +45,9 @@ type Model struct {
 	categoryMode        bool
 	pendingTask         string
 	categories          []string
+	waitingForWorkStart bool
+	restFinishedAt      time.Time
+	autoStartWork       bool
 	startedAt           time.Time
 	intervalStartedAt   time.Time
 }
@@ -84,6 +87,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if m.waitingForWorkStart {
+			now := time.Now()
+			waited := now.Sub(m.restFinishedAt)
+			if waited < 0 {
+				waited = 0
+			}
+			m.waitingForWorkStart = false
+			m.restFinishedAt = time.Time{}
+			m = m.transitionToWork(m.restDuration+waited, now)
+			return m, tickCmd()
+		}
 		if m.lunchReady {
 			switch msg.String() {
 			case "space", "enter":
@@ -182,7 +196,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			go sendNotification(wasRest, wasLunch, m.currentIntervalName)
 			return m, nil
 		} else if m.isRest {
-			m = m.transitionToWork(m.restDuration, now)
+			if m.autoStartWork {
+				m = m.transitionToWork(m.restDuration, now)
+			} else {
+				m.waitingForWorkStart = true
+				m.restFinishedAt = now
+				go sendNotification(wasRest, wasLunch, m.currentIntervalName)
+				return m, tickCmd()
+			}
 		} else {
 			m = m.transitionToRest(m.workDuration, now)
 		}
@@ -206,6 +227,13 @@ func (m Model) View() tea.View {
 		s.WriteString("Lunch is over!\n\n")
 		s.WriteString("Press [enter] or [space] to resume work\n")
 		s.WriteString("[q] to quit\n")
+		return tea.NewView(s.String())
+	}
+
+	if m.waitingForWorkStart {
+		s.WriteString("☕ Break Timer\n\n")
+		s.WriteString("Break is over!\n\n")
+		s.WriteString("Press any key to begin work\n")
 		return tea.NewView(s.String())
 	}
 

@@ -55,6 +55,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 	var intervalDuration time.Duration
 	var hasWork, hasInterval bool
 	var createSessionSummary *bool
+	autoStartWork := cfg.AutoStartWork
 
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--interval" || args[i] == "-i" {
@@ -74,6 +75,8 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		} else if args[i] == "--no-create-session-summary" {
 			f := false
 			createSessionSummary = &f
+		} else if args[i] == "--auto-start-work" {
+			autoStartWork = true
 		} else {
 			if hasWork {
 				return nil, fmt.Errorf("unexpected argument: %s", args[i])
@@ -125,12 +128,13 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		taskInput:           "",
 		startedAt:           now,
 		intervalStartedAt:   now,
+		autoStartWork:       autoStartWork,
 	}
 	return &parseArgsResult{model: model, createSessionSummary: createSessionSummary}, nil
 }
 
 func showHelp() {
-	fmt.Println("Usage: pomo [work] [--interval duration]")
+	fmt.Println("Usage: pomo [work] [--interval duration] [--auto-start-work]")
 	fmt.Println("       pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 	fmt.Println()
 	fmt.Println("Runs repeating work/rest intervals until you quit.")
@@ -147,6 +151,7 @@ func showHelp() {
 	fmt.Println()
 	fmt.Println("Timer options:")
 	fmt.Println("  -i, --interval              Set total interval duration; rest = interval − work (default: 60m)")
+	fmt.Println("      --auto-start-work           Automatically start work when rest ends (default: false)")
 	fmt.Println("      --create-session-summary    Write a Markdown summary on quit (default: true)")
 	fmt.Println("      --no-create-session-summary Disable writing the Markdown summary")
 	fmt.Println()

@@ -26,6 +26,7 @@ type Config struct {
 	WorkTime       int            `yaml:"work_time"`
 	IntervalTime   int            `yaml:"interval_time"`
 	LunchTime      int            `yaml:"lunch_time"`
+	AutoStartWork  bool           `yaml:"auto-start-work-interval"`
 	SessionSummary SessionSummary `yaml:"session_summary"`
 	Categories     []string       `yaml:"categories"`
 	WeeklyReport   WeeklyReport   `yaml:"weekly_report"`
@@ -62,9 +63,10 @@ func processCategories(cats []string) []string {
 // defaultConfig returns the built-in default configuration.
 func defaultConfig() Config {
 	return Config{
-		WorkTime:     50,
-		IntervalTime: 60,
-		LunchTime:    60,
+		WorkTime:      50,
+		IntervalTime:  60,
+		LunchTime:     60,
+		AutoStartWork: false,
 		SessionSummary: SessionSummary{
 			Create: true,
 			Folder: "~/pomos",

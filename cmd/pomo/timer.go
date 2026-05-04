@@ -60,6 +60,8 @@ func (m Model) transitionToRest(elapsed time.Duration, now time.Time) Model {
 	m.totalWorked += elapsed
 	m.isRest = true
 	m.remaining = m.restDuration
+	m.waitingForWorkStart = false
+	m.restFinishedAt = time.Time{}
 	m.endActiveTask(now)
 	m.categoryMode = false
 	m.pendingTask = ""
@@ -72,6 +74,8 @@ func (m Model) transitionToLunch(elapsed time.Duration, now time.Time) Model {
 	m.isRest = true
 	m.isLunch = true
 	m.remaining = m.lunchDuration
+	m.waitingForWorkStart = false
+	m.restFinishedAt = time.Time{}
 	m.endActiveTask(now)
 	m.categoryMode = false
 	m.pendingTask = ""
@@ -85,6 +89,8 @@ func (m Model) transitionToWork(elapsed time.Duration, now time.Time) Model {
 	m.isRest = false
 	m.isLunch = false
 	m.lunchReady = false
+	m.waitingForWorkStart = false
+	m.restFinishedAt = time.Time{}
 	m.remaining = m.workDuration
 	// Generate a fresh interval name — no carry-over
 	m.currentIntervalName = generateIntervalName(m.intervalsCompleted+1, now)

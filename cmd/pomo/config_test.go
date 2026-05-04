@@ -20,6 +20,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.LunchTime != 60 {
 		t.Errorf("Expected LunchTime 60, got %d", cfg.LunchTime)
 	}
+	if cfg.AutoStartWork {
+		t.Error("Expected AutoStartWork to be false by default")
+	}
 	if !cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be true by default")
 	}
@@ -75,7 +78,7 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Fatalf("Could not create config dir: %v", err)
 	}
 
-	content := "work_time: 25\ninterval_time: 45\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
+	content := "work_time: 25\ninterval_time: 45\nauto-start-work-interval: true\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
 	configFile := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Could not write config file: %v", err)
@@ -94,6 +97,9 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	}
 	if cfg.IntervalTime != 45 {
 		t.Errorf("Expected IntervalTime 45, got %d", cfg.IntervalTime)
+	}
+	if !cfg.AutoStartWork {
+		t.Error("Expected AutoStartWork to be true")
 	}
 	if cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be false")
