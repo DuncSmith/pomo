@@ -127,10 +127,7 @@ func queryWeeklyTotals(db *sql.DB, from, to time.Time) ([]categoryTotal, error) 
 const reportWidth = 48
 
 func reportLine(name, durStr string) string {
-	padding := reportWidth - len(name) - len(durStr)
-	if padding < 1 {
-		padding = 1
-	}
+	padding := max(reportWidth - len(name) - len(durStr), 1)
 	return name + strings.Repeat(" ", padding) + durStr
 }
 

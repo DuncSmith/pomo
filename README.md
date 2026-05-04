@@ -163,7 +163,7 @@ pomo report --from 2025-04-21 --to 2025-04-25   # explicit date range
 pomo report --from 2025-04-21            # from that date to today
 ```
 
-**Session data** is stored automatically in `~/.local/share/pomo/pomo.db` (XDG-compliant) every time you quit `pomo`. A Markdown summary is also written to `~/pomos/` on each quit.
+**Session data** is stored automatically in `~/.local/share/pomo/pomo.db` every time you quit `pomo`. A Markdown summary is also written to `~/pomos/` on each quit.
 
 **Configure the work week** in `~/.config/pomo/config.yaml`:
 

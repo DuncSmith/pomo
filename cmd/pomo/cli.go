@@ -58,7 +58,8 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 	autoStartWork := cfg.AutoStartWork
 
 	for i := 0; i < len(args); i++ {
-		if args[i] == "--interval" || args[i] == "-i" {
+		switch args[i] {
+		case "--interval", "-i":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("--interval requires a value")
 			}
@@ -69,15 +70,15 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 			intervalDuration = d
 			hasInterval = true
 			i++
-		} else if args[i] == "--create-session-summary" {
+		case "--create-session-summary":
 			t := true
 			createSessionSummary = &t
-		} else if args[i] == "--no-create-session-summary" {
+		case "--no-create-session-summary":
 			f := false
 			createSessionSummary = &f
-		} else if args[i] == "--auto-start-work" {
+		case "--auto-start-work":
 			autoStartWork = true
-		} else {
+		default:
 			if hasWork {
 				return nil, fmt.Errorf("unexpected argument: %s", args[i])
 			}
