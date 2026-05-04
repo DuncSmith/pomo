@@ -34,6 +34,17 @@ func (m *Model) startTask(name string, at time.Time) {
 	m.tasks = append(m.tasks, Task{Name: name, StartedAt: at})
 }
 
+// recentCategoryForTask returns the category of the most recent task entry
+// matching name. The bool indicates whether a non-empty category was found.
+func recentCategoryForTask(tasks []Task, name string) (string, bool) {
+	for i := len(tasks) - 1; i >= 0; i-- {
+		if tasks[i].Name == name && tasks[i].Category != "" {
+			return tasks[i].Category, true
+		}
+	}
+	return "", false
+}
+
 // recentTaskNames returns up to 9 unique task names from the session history,
 // most-recently-started first, excluding the currently active task.
 func recentTaskNames(tasks []Task) []string {
@@ -117,7 +128,10 @@ func (m Model) handleTaskInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 					name := m.recentTasks[idx]
 					m.taskMode = false
 					m.recentTasks = nil
-					if len(m.categories) > 0 {
+					if cat, found := recentCategoryForTask(m.tasks, name); found {
+						m.startTask(name, time.Now())
+						m.tasks[len(m.tasks)-1].Category = cat
+					} else if len(m.categories) > 0 {
 						m.pendingTask = name
 						m.categoryMode = true
 					} else {

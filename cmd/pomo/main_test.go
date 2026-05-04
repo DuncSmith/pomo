@@ -653,3 +653,95 @@ func TestSkipRestTracksPartialTime(t *testing.T) {
 		t.Error("Expected to transition to work phase after skipping rest")
 	}
 }
+
+func TestRecentCategoryForTask(t *testing.T) {
+	now := time.Now()
+	tasks := []Task{
+		{Name: "emails", Category: "chore", StartedAt: now, EndedAt: now.Add(5 * time.Minute)},
+		{Name: "design", Category: "strategy work", StartedAt: now.Add(5 * time.Minute), EndedAt: now.Add(15 * time.Minute)},
+		{Name: "emails", Category: "meeting prep", StartedAt: now.Add(15 * time.Minute), EndedAt: now.Add(20 * time.Minute)},
+	}
+
+	// Should return the most recent category for "emails"
+	cat, found := recentCategoryForTask(tasks, "emails")
+	if !found || cat != "meeting prep" {
+		t.Errorf("Expected ('meeting prep', true), got (%q, %v)", cat, found)
+	}
+
+	// Should return category for "design"
+	cat, found = recentCategoryForTask(tasks, "design")
+	if !found || cat != "strategy work" {
+		t.Errorf("Expected ('strategy work', true), got (%q, %v)", cat, found)
+	}
+
+	// Unknown task returns not found
+	cat, found = recentCategoryForTask(tasks, "unknown")
+	if found {
+		t.Errorf("Expected not found for unknown task, got (%q, %v)", cat, found)
+	}
+
+	// Uncategorised task returns not found
+	uncatTasks := []Task{
+		{Name: "emails", Category: "", StartedAt: now, EndedAt: now.Add(5 * time.Minute)},
+	}
+	cat, found = recentCategoryForTask(uncatTasks, "emails")
+	if found {
+		t.Errorf("Expected not found for uncategorised task, got (%q, %v)", cat, found)
+	}
+}
+
+func TestTaskPickerResumeCategorisedTaskSkipsCategoryMode(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		taskMode:    true,
+		taskInput:   "",
+		recentTasks: []string{"emails"},
+		categories:  []string{"chore", "meeting prep", "technical work"},
+		tasks: []Task{
+			{Name: "emails", Category: "meeting prep", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+		},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to be false")
+	}
+	if model.categoryMode {
+		t.Error("Expected categoryMode to be false — categorised task should skip category picker")
+	}
+	active := model.activeTask()
+	if active == nil || active.Name != "emails" {
+		t.Errorf("Expected active task 'emails', got %v", active)
+	}
+	if active != nil && active.Category != "meeting prep" {
+		t.Errorf("Expected category 'meeting prep', got %q", active.Category)
+	}
+}
+
+func TestTaskPickerResumeUncategorisedTaskEntersCategoryMode(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		taskMode:    true,
+		taskInput:   "",
+		recentTasks: []string{"emails"},
+		categories:  []string{"chore", "meeting prep"},
+		tasks: []Task{
+			{Name: "emails", Category: "", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
+		},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
+	model := result.(Model)
+
+	if model.taskMode {
+		t.Error("Expected taskMode to be false")
+	}
+	if !model.categoryMode {
+		t.Error("Expected categoryMode to be true for uncategorised task")
+	}
+	if model.pendingTask != "emails" {
+		t.Errorf("Expected pendingTask 'emails', got %q", model.pendingTask)
+	}
+}
