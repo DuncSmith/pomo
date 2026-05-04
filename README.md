@@ -50,15 +50,19 @@ bin/build
 # Custom interval duration (rest = interval − work)
 ./pomo 45 --interval 90   # 45m work, 90m interval (45m rest)
 ./pomo -i 90              # 50m work, 90m interval (40m rest)
+
+# Auto-start work when rest ends
+./pomo --auto-start-work
 ```
 
 Rest time is always derived as **interval − work** and cannot be set directly.
 
-The timer runs work → rest → work → rest continuously until you quit.
+The timer runs work → rest repeatedly until you quit.
+By default, when rest ends, pomo waits for a keypress before starting work.
+Use `--auto-start-work` (or config below) to start work immediately when rest ends.
 On exit, a session summary shows:
 - Intervals completed
-- Total time worked and rested  
-- Breakdown of work time by interval name (if named)
+- Total time worked and rested
 - Detailed time breakdown for each task tracked
 
 ### Keyboard Controls
@@ -67,24 +71,16 @@ On exit, a session summary shows:
 - `n` - Name current work interval (press again to rename)
 - `a` - Add or switch current task (work phase only)
 - `s` - Skip current phase (work → rest or rest → work)
+- `r` - Reset current work interval: restores full work duration and discards all tasks started in this interval (work phase only)
 - `l` - Take a lunch break (work phase only)
 
 ### Interval Naming
-During work phases, press `n` to give a name to your current interval. This name will be:
-- Saved in your session summary
-- Inherited by subsequent intervals (so you don't need to rename every time)
-- Shown in the session summary with tracked time per name
 
-Example usage:
-```bash
-# Start a timer
-./pomo 25
+Each work interval is automatically named based on the time of day — e.g. "Morning #1", "Afternoon #2". This name is shown in the timer header.
 
-# During work phase, press 'n' and type "Email cleanup"
-# The interval will be named "Email cleanup"
-# After break, next work interval will inherit "Email cleanup"
-# Press 'n' again to rename if needed
-```
+During a work phase, press `n` to rename the current interval. The prompt pre-fills the existing name; press Enter to confirm or Esc to cancel.
+
+Each new work interval gets a fresh auto-generated name. Renaming one interval does not carry the name forward to subsequent intervals.
 
 ### Lunch Breaks
 
@@ -167,7 +163,7 @@ pomo report --from 2025-04-21 --to 2025-04-25   # explicit date range
 pomo report --from 2025-04-21            # from that date to today
 ```
 
-**Session data** is stored automatically in `~/.local/share/pomo/pomo.db` (XDG-compliant) every time you quit `pomo`. The daily Markdown summaries continue to be written exactly as before — the database is additive.
+**Session data** is stored automatically in `~/.local/share/pomo/pomo.db` (XDG-compliant) every time you quit `pomo`. A Markdown summary is also written to `~/pomos/` on each quit.
 
 **Configure the work week** in `~/.config/pomo/config.yaml`:
 
@@ -185,10 +181,11 @@ When you quit `pomo`, it prints a terminal summary and optionally writes a Markd
 Each summary file includes a YAML frontmatter block at the top:
 ```yaml
 ---
+created: 2026-04-17
+title: 2026-04-17
 tags:
   - daily
   - pomo summary
-created: 2026-04-17
 ---
 ```
 
@@ -219,6 +216,7 @@ Without categories configured, the original flat task list is shown.
 work_time: 50
 interval_time: 60
 lunch_time: 60
+auto-start-work-interval: false
 session_summary:
   create_session_summary: true
   summary_folder: ~/pomos
@@ -241,6 +239,7 @@ weekly_report:
 | `create_session_summary` | Whether to write a Markdown file on quit (default: `true`) |
 | `summary_folder` | Directory for summary files (default: `~/pomos`) |
 | `summary_tags` | Custom tags for the frontmatter block. Omit to use defaults. Set to `[]` to omit the `tags` key entirely. |
+| `auto-start-work-interval` | Automatically start work as soon as rest ends (default: `false`) |
 | `categories` | List of task categories (up to 9). Omit or leave empty to disable the category step entirely. New installs include the defaults shown above. |
 | `weekly_report.work_days` | Weekdays that define the report window (default: `[Mon, Tue, Wed, Thu, Fri]`). Valid values: `Mon Tue Wed Thu Fri Sat Sun`. |
 
