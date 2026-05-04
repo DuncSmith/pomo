@@ -45,7 +45,7 @@ go mod download              # Download dependencies
   - `cmd/pomo/main.go` (~47 lines) — `main()` entry point only
   - `cmd/pomo/model.go` (~316 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, `formatTime`
   - `cmd/pomo/tasks.go` (~159 lines) — Task management (`activeTask`, `endActiveTask`, `startTask`, `recentTaskNames`), input handlers (`handleNamingInput`, `handleTaskInput`, `handleCategoryInput`)
-  - `cmd/pomo/timer.go` (~74 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`)
+  - `cmd/pomo/timer.go` (~74 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`, `resetInterval`)
   - `cmd/pomo/config.go` — `Config` type, YAML config loading/writing, `processCategories`, `processWorkDays`
   - `cmd/pomo/cli.go` — Version vars, `parseArgsResult`, `reportArgs`, argument parsing, help text
   - `cmd/pomo/summary.go` (~245 lines) — Session summary output (terminal + Markdown file), `groupTasksByCategory`, `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
@@ -85,6 +85,7 @@ go mod download              # Download dependencies
 - `categories []string`: Categories loaded from config, set in `main()` after parsing; nil/empty means category step is skipped
 - `tasks []Task`: Append-only log of all task records for the session
 - `startedAt`: Session start timestamp (used to name the summary file)
+- `intervalStartedAt`: Timestamp when the current work interval began; used by `resetInterval()` to identify which tasks to discard
 
 **`Task`** — Named unit of work:
 - `Name string`: User-provided task name
@@ -108,6 +109,7 @@ go mod download              # Download dependencies
 **Phase transitions**:
 - `transitionToRest(elapsed, now)`: Accumulates `elapsed` work time, sets `isRest=true`, ends active task at `now`, clears `categoryMode`/`pendingTask`
 - `transitionToWork(elapsed, now)`: Accumulates `elapsed` rest time, increments counter, generates new interval name, continues last task name **and category** into a new Task entry
+- `resetInterval()`: Resets the current work interval — restores `remaining` to `workDuration`, removes tasks started during this interval (`StartedAt >= intervalStartedAt`), does NOT accumulate elapsed time into `totalWorked`, clears all input modes
 - `generateIntervalName(n, now)`: Produces `"Morning #N"` / `"Afternoon #N"` / `"Evening #N"` / `"Night #N"` based on time of day
 
 **Task tracking** (pointer receivers, mutate in place):
@@ -184,6 +186,7 @@ Report flag validation: `--last` and `--from`/`--to` are mutually exclusive; `--
 | `n` | Enter naming mode (rename current work interval; pre-fills current name) |
 | `a` | Enter task mode (add/switch task; work phase only) |
 | `s` | Skip current phase immediately |
+| `r` | Reset current work interval (discards elapsed time and interval tasks; work phase only) |
 | `Enter` | Confirm input (naming / task mode) |
 | `Esc` | Cancel input (naming / task / category mode); at category step discards the pending task entirely |
 | `Backspace` / `Delete` | Remove last character (UTF-8 rune-aware) |
@@ -192,7 +195,7 @@ Report flag validation: `--last` and `--from`/`--to` are mutually exclusive; `--
 ### Testing Strategy
 
 - ~55 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go`, `db_test.go`, `report_test.go` (white-box, `package main`)
-- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation, recent task picker
+- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation, recent task picker, reset interval
 - DB tests: schema creation, round-trip session+task insert, active-task skipping, empty-task session
 - Report tests: window resolution (current week, last week, explicit range, custom work days), weekly total aggregation, uncategorised-last sort, filename format
 - Category behaviour degrades gracefully in all existing tests: models without `categories` set bypass `categoryMode` and exercise the original task flow unchanged

@@ -32,6 +32,29 @@ func generateIntervalName(n int, now time.Time) string {
 	return fmt.Sprintf("%s #%d", prefix, n)
 }
 
+// resetInterval restarts the current work interval from scratch,
+// discarding all elapsed time and tasks created during this interval.
+func (m Model) resetInterval() Model {
+	m.remaining = m.workDuration
+	// Remove tasks that were started during this interval
+	kept := m.tasks[:0:0]
+	for _, t := range m.tasks {
+		if t.StartedAt.Before(m.intervalStartedAt) {
+			kept = append(kept, t)
+		}
+	}
+	m.tasks = kept
+	// Clear any active input modes
+	m.namingMode = false
+	m.nameInput = ""
+	m.taskMode = false
+	m.taskInput = ""
+	m.recentTasks = nil
+	m.categoryMode = false
+	m.pendingTask = ""
+	return m
+}
+
 // transitionToRest transitions from work to rest phase.
 func (m Model) transitionToRest(elapsed time.Duration, now time.Time) Model {
 	m.totalWorked += elapsed
@@ -65,6 +88,7 @@ func (m Model) transitionToWork(elapsed time.Duration, now time.Time) Model {
 	m.remaining = m.workDuration
 	// Generate a fresh interval name — no carry-over
 	m.currentIntervalName = generateIntervalName(m.intervalsCompleted+1, now)
+	m.intervalStartedAt = now
 	// Continue the last task (if any) into this new interval, carrying its category
 	if len(m.tasks) > 0 {
 		last := m.tasks[len(m.tasks)-1]

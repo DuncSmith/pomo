@@ -124,6 +124,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		taskMode:            false,
 		taskInput:           "",
 		startedAt:           now,
+		intervalStartedAt:   now,
 	}
 	return &parseArgsResult{model: model, createSessionSummary: createSessionSummary}, nil
 }

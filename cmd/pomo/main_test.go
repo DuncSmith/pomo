@@ -745,3 +745,159 @@ func TestTaskPickerResumeUncategorisedTaskEntersCategoryMode(t *testing.T) {
 		t.Errorf("Expected pendingTask 'emails', got %q", model.pendingTask)
 	}
 }
+
+func TestResetIntervalResetsTimer(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		workDuration:      50 * time.Minute,
+		restDuration:      10 * time.Minute,
+		remaining:         30 * time.Minute, // 20 mins elapsed
+		isRest:            false,
+		totalWorked:       0,
+		tasks:             []Task{},
+		intervalStartedAt: now.Add(-20 * time.Minute),
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
+	model := result.(Model)
+
+	if model.remaining != 50*time.Minute {
+		t.Errorf("Expected remaining reset to 50m, got %v", model.remaining)
+	}
+	if model.totalWorked != 0 {
+		t.Error("Expected totalWorked to remain 0 (elapsed time discarded)")
+	}
+}
+
+func TestResetIntervalRemovesCurrentIntervalTasks(t *testing.T) {
+	intervalStart := time.Now()
+	oldTask := Task{
+		Name:      "old task",
+		StartedAt: intervalStart.Add(-60 * time.Minute), // from a previous interval
+		EndedAt:   intervalStart.Add(-10 * time.Minute),
+	}
+	currentTask := Task{
+		Name:      "current task",
+		StartedAt: intervalStart.Add(5 * time.Minute), // started during this interval
+	}
+
+	m := Model{
+		workDuration:      50 * time.Minute,
+		restDuration:      10 * time.Minute,
+		remaining:         30 * time.Minute,
+		isRest:            false,
+		tasks:             []Task{oldTask, currentTask},
+		intervalStartedAt: intervalStart,
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
+	model := result.(Model)
+
+	if len(model.tasks) != 1 {
+		t.Fatalf("Expected 1 task after reset, got %d", len(model.tasks))
+	}
+	if model.tasks[0].Name != "old task" {
+		t.Errorf("Expected preserved task to be 'old task', got %q", model.tasks[0].Name)
+	}
+}
+
+func TestResetIntervalIgnoredDuringRest(t *testing.T) {
+	m := Model{
+		workDuration: 50 * time.Minute,
+		restDuration: 10 * time.Minute,
+		remaining:    5 * time.Minute,
+		isRest:       true,
+		tasks:        []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
+	model := result.(Model)
+
+	if model.remaining != 5*time.Minute {
+		t.Errorf("Expected remaining unchanged at 5m during rest, got %v", model.remaining)
+	}
+}
+
+func TestResetIntervalIgnoredDuringLunch(t *testing.T) {
+	m := Model{
+		workDuration:  50 * time.Minute,
+		restDuration:  10 * time.Minute,
+		lunchDuration: 30 * time.Minute,
+		remaining:     15 * time.Minute,
+		isRest:        true,
+		isLunch:       true,
+		tasks:         []Task{},
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
+	model := result.(Model)
+
+	if model.remaining != 15*time.Minute {
+		t.Errorf("Expected remaining unchanged at 15m during lunch, got %v", model.remaining)
+	}
+}
+
+func TestResetIntervalClearsInputModes(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		workDuration:      50 * time.Minute,
+		restDuration:      10 * time.Minute,
+		remaining:         30 * time.Minute,
+		isRest:            false,
+		tasks:             []Task{},
+		intervalStartedAt: now,
+	}
+
+	// Test that resetInterval clears all modes directly
+	m.namingMode = true
+	m.nameInput = "test"
+	m.taskMode = true
+	m.taskInput = "test"
+	m.categoryMode = true
+	m.pendingTask = "test"
+	m.recentTasks = []string{"a", "b"}
+
+	result := m.resetInterval()
+
+	if result.namingMode {
+		t.Error("Expected namingMode to be cleared")
+	}
+	if result.nameInput != "" {
+		t.Error("Expected nameInput to be cleared")
+	}
+	if result.taskMode {
+		t.Error("Expected taskMode to be cleared")
+	}
+	if result.taskInput != "" {
+		t.Error("Expected taskInput to be cleared")
+	}
+	if result.categoryMode {
+		t.Error("Expected categoryMode to be cleared")
+	}
+	if result.pendingTask != "" {
+		t.Error("Expected pendingTask to be cleared")
+	}
+	if result.recentTasks != nil {
+		t.Error("Expected recentTasks to be cleared")
+	}
+}
+
+func TestResetIntervalPreservesTotalWorkedFromPriorIntervals(t *testing.T) {
+	now := time.Now()
+	m := Model{
+		workDuration:      50 * time.Minute,
+		restDuration:      10 * time.Minute,
+		remaining:         30 * time.Minute,
+		isRest:            false,
+		totalWorked:       50 * time.Minute, // from a prior completed interval
+		tasks:             []Task{},
+		intervalStartedAt: now.Add(-20 * time.Minute),
+	}
+
+	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
+	model := result.(Model)
+
+	if model.totalWorked != 50*time.Minute {
+		t.Errorf("Expected totalWorked to remain 50m (prior interval preserved), got %v", model.totalWorked)
+	}
+}

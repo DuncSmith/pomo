@@ -46,6 +46,7 @@ type Model struct {
 	pendingTask         string
 	categories          []string
 	startedAt           time.Time
+	intervalStartedAt   time.Time
 }
 
 func tickCmd() tea.Cmd {
@@ -127,6 +128,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				now := time.Now()
 				elapsed := m.workDuration - m.remaining
 				m = m.transitionToLunch(elapsed, now)
+				return m, nil
+			}
+			return m, nil
+		case "r":
+			if !m.isRest && !m.isLunch {
+				m = m.resetInterval()
 				return m, nil
 			}
 			return m, nil
@@ -301,7 +308,7 @@ func (m Model) View() tea.View {
 		if m.isRest {
 			s.WriteString("Press [s] to skip interval, [space] to pause/resume, [q] to quit\n")
 		} else {
-			s.WriteString("[n] rename interval  [s] skip interval  [a] add task  [l] lunch\n")
+			s.WriteString("[n] rename interval  [s] skip interval  [a] add task  [l] lunch  [r] reset\n")
 			s.WriteString("[space] pause/resume  [q] quit\n")
 		}
 	}
