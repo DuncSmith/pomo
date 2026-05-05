@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 type tickMsg time.Time
@@ -50,6 +51,7 @@ type Model struct {
 	autoStartWork       bool
 	startedAt           time.Time
 	intervalStartedAt   time.Time
+	width               int // terminal width, updated via WindowSizeMsg
 }
 
 func tickCmd() tea.Cmd {
@@ -168,19 +170,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
-		const padding = 4
-		const timeDisplayWidth = 20
-		const minBarWidth = 20
-		const maxBarWidth = 80
-
-		width := msg.Width - padding - timeDisplayWidth
-		if width > maxBarWidth {
-			width = maxBarWidth
-		}
-		if width < minBarWidth {
-			width = minBarWidth
-		}
-		m.progress.SetWidth(width)
+		m.width = msg.Width
+		barW := viewBarWidth(msg.Width)
+		m.progress.SetWidth(barW)
 		return m, nil
 	case tickMsg:
 		if !m.paused && m.remaining > 0 {
@@ -219,6 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() tea.View {
 	var s strings.Builder
 
+	// ── Special input modes (minimal UI, unchanged behaviour) ─────────
 	if m.namingMode {
 		s.WriteString(fmt.Sprintf("Rename interval: %s_\n", m.nameInput))
 		s.WriteString("\n[enter] confirm   [esc] cancel\n")
@@ -271,78 +264,132 @@ func (m Model) View() tea.View {
 		return tea.NewView(s.String())
 	}
 
-	emoji := "🍅"
-	title := "Pomodoro Timer"
-
-	if m.isLunch {
-		emoji = "🥪"
-		title = "Lunch Break"
-	} else if m.isRest {
-		emoji = "☕"
-		title = "Break Timer"
+	// ── Layout constants ───────────────────────────────────────────────
+	width := m.width
+	if width == 0 {
+		width = 80
 	}
 
+	// ── Phase metadata ─────────────────────────────────────────────────
 	phaseDur := m.phaseDuration()
-	intervalNum := m.intervalsCompleted + 1
-	currentName := m.currentIntervalName
-	if currentName == "" {
-		currentName = generateIntervalName(intervalNum, time.Now())
-	}
-
-	if m.isLunch {
-		if phaseDur < time.Minute {
-			s.WriteString(fmt.Sprintf("%s %s (%d seconds)\n", emoji, title, int(phaseDur.Seconds())))
-		} else {
-			s.WriteString(fmt.Sprintf("%s %s (%.0fm)\n", emoji, title, phaseDur.Minutes()))
+	var phase, emoji, sessionName string
+	switch {
+	case m.isLunch:
+		phase, emoji, sessionName = "lunch", "🥪", "Lunch Break"
+	case m.isRest:
+		phase, emoji, sessionName = "rest", "☕", "Break Timer"
+	default:
+		phase, emoji = "work", "🍅"
+		sessionName = m.currentIntervalName
+		if sessionName == "" {
+			sessionName = generateIntervalName(m.intervalsCompleted+1, time.Now())
 		}
-	} else if phaseDur < time.Minute {
-		s.WriteString(fmt.Sprintf("%s %s: %s (%d seconds)\n", emoji, title, currentName, int(phaseDur.Seconds())))
-	} else {
-		s.WriteString(fmt.Sprintf("%s %s: %s (%.0fm)\n", emoji, title, currentName, phaseDur.Minutes()))
 	}
-	s.WriteString("\n")
 
+	// ── 1 & 2. BREADCRUMB + HEADER with right-aligned badge ───────────
+	crumbs := dimSt.Render("pomo › " + strings.ToLower(sessionName) + " › " + phase)
+	var badgeText string
+	if m.isRest || m.isLunch {
+		badgeText = fmt.Sprintf("%.0f MIN BREAK", phaseDur.Minutes())
+	} else {
+		badgeText = fmt.Sprintf("%.0f MIN FOCUS", m.workDuration.Minutes())
+	}
+	badge := badgeSt.Render(badgeText)
+	badgeLines := strings.Split(badge, "\n")
+	badgeW := lipgloss.Width(badge)
+
+	headerLeftLines := []string{crumbs, emoji + " " + sessionName}
+	for len(headerLeftLines) < len(badgeLines) {
+		headerLeftLines = append(headerLeftLines, "")
+	}
+	leftW := width - badgeW
+	if leftW < 10 {
+		leftW = 10
+	}
+	for i, bl := range badgeLines {
+		ll := ""
+		if i < len(headerLeftLines) {
+			ll = headerLeftLines[i]
+		}
+		pad := leftW - lipgloss.Width(ll)
+		if pad < 0 {
+			pad = 0
+		}
+		s.WriteString(ll + strings.Repeat(" ", pad) + bl + "\n")
+	}
+
+	// ── 3. CLOCK (3-row big digits) ────────────────────────────────────
 	elapsed := phaseDur - m.remaining
-	percentage := float64(elapsed) / float64(phaseDur) * 100
-
-	if m.remaining <= 0 {
-		if m.isRest {
-			s.WriteString("🎉 Break completed!\n")
-		} else {
-			s.WriteString("🎉 Pomodoro completed!\n")
-		}
-	} else {
-		timeStr := formatTime(m.remaining)
-		progressPercent := percentage / 100.0
-		progressBar := m.progress.ViewAs(progressPercent)
-
-		if m.paused {
-			s.WriteString(fmt.Sprintf("⏰ %s %s (PAUSED)\n", timeStr, progressBar))
-		} else {
-			s.WriteString(fmt.Sprintf("⏰ %s %s\n", timeStr, progressBar))
-		}
-
-		// Show active task
-		if !m.isRest {
-			if t := m.activeTask(); t != nil {
-				if t.Category != "" {
-					s.WriteString(fmt.Sprintf("   Task: %s  [%s]\n", t.Name, t.Category))
-				} else {
-					s.WriteString(fmt.Sprintf("   Task: %s\n", t.Name))
-				}
-			} else {
-				s.WriteString("   Task: (none)\n")
+	if elapsed < 0 {
+		elapsed = 0
+	}
+	pct := 0.0
+	if phaseDur > 0 {
+		pct = float64(elapsed) / float64(phaseDur) * 100
+	}
+	clockRows := bigClockRows(formatTime(m.remaining))
+	pctLabel := dimSt.Render(fmt.Sprintf("  %.0f%% elapsed", pct))
+	for i, row := range clockRows {
+		styled := clockSt.Render(row)
+		if i == len(clockRows)-1 {
+			pausedSuffix := ""
+			if m.paused {
+				pausedSuffix = "  " + pauseSt.Render("PAUSED")
 			}
-		}
-
-		s.WriteString("\n")
-		if m.isRest {
-			s.WriteString("Press [s] to skip interval, [space] to pause/resume, [q] to quit\n")
+			s.WriteString(styled + pctLabel + pausedSuffix + "\n")
 		} else {
-			s.WriteString("[n] rename interval  [s] skip interval  [a] add task  [l] lunch  [r] reset\n")
-			s.WriteString("[space] pause/resume  [q] quit\n")
+			s.WriteString(styled + "\n")
 		}
 	}
+
+	// ── 4. PROGRESS BAR + MINUTE MARKERS ─────────────────────────────
+	barWidth := viewBarWidth(width)
+	progressPct := 0.0
+	if phaseDur > 0 {
+		progressPct = float64(elapsed) / float64(phaseDur)
+	}
+	s.WriteString("  " + m.progress.ViewAs(progressPct) + "\n")
+	s.WriteString("  " + minuteMarkers(elapsed, phaseDur, barWidth) + "\n")
+
+	// ── 5. TASK ROW ───────────────────────────────────────────────────
+	s.WriteByte('\n')
+	if !m.isRest && !m.isLunch {
+		var taskLeft string
+		if t := m.activeTask(); t != nil {
+			if t.Category != "" {
+				taskLeft = "  › " + t.Name + "  " + dimSt.Render("["+t.Category+"]")
+			} else {
+				taskLeft = "  › " + t.Name
+			}
+		} else {
+			taskLeft = "  " + taskDimSt.Render("› no task set")
+		}
+		taskHint := dimSt.Render("[a] add task")
+		gap := width - lipgloss.Width(taskLeft) - lipgloss.Width(taskHint) - 2
+		if gap < 1 {
+			gap = 1
+		}
+		s.WriteString(taskLeft + strings.Repeat(" ", gap) + taskHint + "\n")
+	}
+
+	// ── 6. POMODORO DOTS ──────────────────────────────────────────────
+	s.WriteByte('\n')
+	s.WriteString("  " + pomodoroDots(m) + "\n")
+
+	// ── 7. DIVIDER ────────────────────────────────────────────────────
+	s.WriteByte('\n')
+	divW := width - 4
+	if divW < 20 {
+		divW = 20
+	}
+	s.WriteString("  " + dimSt.Render(strings.Repeat("─", divW)) + "\n\n")
+
+	// ── 8. KEYBINDING PANEL ───────────────────────────────────────────
+	s.WriteString(renderKeybindings(m))
+
+	// ── 9. STATUS BAR ─────────────────────────────────────────────────
+	s.WriteByte('\n')
+	s.WriteString(renderStatusBar(m) + "\n")
 
 	return tea.NewView(s.String())
 }
