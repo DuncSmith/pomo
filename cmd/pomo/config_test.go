@@ -26,7 +26,7 @@ func TestDefaultConfig(t *testing.T) {
 	if !cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be true by default")
 	}
-	expectedTags := []string{"daily", "pomo summary"}
+	expectedTags := []string{"daily", "pomo-summary"}
 	if len(cfg.SessionSummary.Tags) != len(expectedTags) {
 		t.Fatalf("Expected %d default tags, got %d", len(expectedTags), len(cfg.SessionSummary.Tags))
 	}
@@ -105,7 +105,7 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Error("Expected SessionSummary.Create to be false")
 	}
 	// When summary_tags is omitted in config file, defaults are retained
-	expectedDefaultTags := []string{"daily", "pomo summary"}
+	expectedDefaultTags := []string{"daily", "pomo-summary"}
 	if len(cfg.SessionSummary.Tags) != len(expectedDefaultTags) {
 		t.Fatalf("Expected %d default tags when omitted, got %d", len(expectedDefaultTags), len(cfg.SessionSummary.Tags))
 	}
