@@ -185,8 +185,8 @@ func TestPhaseTransitionRestWaitsForConfirmationByDefault(t *testing.T) {
 	if model.totalRested < 10*time.Minute+3*time.Second {
 		t.Errorf("Expected totalRested to include wait time, got %v", model.totalRested)
 	}
-	if cmd == nil {
-		t.Error("Expected tickCmd after confirming work start")
+	if cmd != nil {
+		t.Error("Expected nil cmd after confirming work start (tick loop already running)")
 	}
 }
 

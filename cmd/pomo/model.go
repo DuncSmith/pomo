@@ -96,7 +96,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.waitingForWorkStart = false
 			m.restFinishedAt = time.Time{}
 			m = m.transitionToWork(m.restDuration+waited, now)
-			return m, tickCmd()
+			// Don't return tickCmd() here — the tick loop is already running
+			// from when waitingForWorkStart was set. Returning another tickCmd
+			// would create a duplicate tick chain, doubling the countdown speed.
+			return m, nil
 		}
 		if m.lunchReady {
 			switch msg.String() {
