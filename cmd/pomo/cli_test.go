@@ -137,24 +137,32 @@ func TestParseArgs(t *testing.T) {
 			pomodorosPerCycle: 4,
 		},
 		{
-			name:              "custom pomodoro duration (bare number)",
-			args:              []string{"50"},
+			name:              "custom work duration (-w flag)",
+			args:              []string{"-w", "50"},
 			pomodoroDuration:  50 * time.Minute,
 			shortBreak:        5 * time.Minute,
 			longBreak:         10 * time.Minute,
 			pomodorosPerCycle: 4,
 		},
 		{
-			name:              "custom pomodoro duration (with m suffix)",
-			args:              []string{"30m"},
+			name:              "custom work duration (--work long flag)",
+			args:              []string{"--work", "40"},
+			pomodoroDuration:  40 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
+		},
+		{
+			name:              "custom work duration (with m suffix)",
+			args:              []string{"-w", "30m"},
 			pomodoroDuration:  30 * time.Minute,
 			shortBreak:        5 * time.Minute,
 			longBreak:         10 * time.Minute,
 			pomodorosPerCycle: 4,
 		},
 		{
-			name:              "custom pomodoro duration (seconds)",
-			args:              []string{"90s"},
+			name:              "custom work duration (seconds)",
+			args:              []string{"-w", "90s"},
 			pomodoroDuration:  90 * time.Second,
 			shortBreak:        5 * time.Minute,
 			longBreak:         10 * time.Minute,
@@ -186,7 +194,7 @@ func TestParseArgs(t *testing.T) {
 		},
 		{
 			name:              "all flags combined",
-			args:              []string{"50", "-s", "10", "-L", "20", "-c", "3"},
+			args:              []string{"-w", "50", "-s", "10", "-L", "20", "-c", "3"},
 			pomodoroDuration:  50 * time.Minute,
 			shortBreak:        10 * time.Minute,
 			longBreak:         20 * time.Minute,
@@ -203,7 +211,7 @@ func TestParseArgs(t *testing.T) {
 		},
 		{
 			name:              "short break with m suffix",
-			args:              []string{"30", "--short-break", "7m"},
+			args:              []string{"-w", "30", "--short-break", "7m"},
 			pomodoroDuration:  30 * time.Minute,
 			shortBreak:        7 * time.Minute,
 			longBreak:         10 * time.Minute,
@@ -230,8 +238,18 @@ func TestParseArgs(t *testing.T) {
 			expectAction: "version",
 		},
 		{
-			name:        "invalid pomodoro duration",
-			args:        []string{"abc"},
+			name:        "invalid work duration",
+			args:        []string{"-w", "abc"},
+			expectError: true,
+		},
+		{
+			name:        "missing work value",
+			args:        []string{"-w"},
+			expectError: true,
+		},
+		{
+			name:        "unknown argument",
+			args:        []string{"badarg"},
 			expectError: true,
 		},
 		{
@@ -265,13 +283,8 @@ func TestParseArgs(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "unexpected argument",
-			args:        []string{"25", "30"},
-			expectError: true,
-		},
-		{
-			name:        "zero pomodoro duration",
-			args:        []string{"0"},
+			name:        "zero work duration",
+			args:        []string{"-w", "0"},
 			expectError: true,
 		},
 		{
@@ -431,7 +444,7 @@ func TestParseArgsCLIOverridesConfig(t *testing.T) {
 			Create: true,
 		},
 	}
-	result, err := parseArgs([]string{"45", "-s", "8", "-L", "20", "-c", "5"}, cfg)
+	result, err := parseArgs([]string{"-w", "45", "-s", "8", "-L", "20", "-c", "5"}, cfg)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

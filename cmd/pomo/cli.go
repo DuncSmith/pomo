@@ -101,18 +101,21 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		case "--no-create-session-summary":
 			f := false
 			createSessionSummary = &f
-		case "--auto-start-work":
-			autoStartWork = true
-		default:
-			if hasPomodoro {
-				return nil, fmt.Errorf("unexpected argument: %s", args[i])
+		case "--work", "-w":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--work requires a value")
 			}
-			d, err := parseDuration(args[i])
+			d, err := parseDuration(args[i+1])
 			if err != nil {
-				return nil, fmt.Errorf("invalid duration: %s", args[i])
+				return nil, fmt.Errorf("invalid work duration: %s", args[i+1])
 			}
 			pomodoroDuration = d
 			hasPomodoro = true
+			i++
+		case "--auto-start-work":
+			autoStartWork = true
+		default:
+			return nil, fmt.Errorf("unknown argument: %s", args[i])
 		}
 	}
 
@@ -166,7 +169,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 }
 
 func showHelp() {
-	fmt.Println("Usage: pomo [pomodoro] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work]")
+	fmt.Println("Usage: pomo [-w duration] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work]")
 	fmt.Println("       pomo --init")
 	fmt.Println("       pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 	fmt.Println()
@@ -174,14 +177,15 @@ func showHelp() {
 	fmt.Println("with a longer break after every N pomodoros, until you quit.")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  pomo                   # 25m pomodoro / 5m short / 10m long / 4 per cycle")
-	fmt.Println("  pomo 50                # 50m pomodoro")
-	fmt.Println("  pomo 50 -s 10 -L 20    # 50m pomodoro, 10m short break, 20m long break")
-	fmt.Println("  pomo -c 3              # long break every 3rd pomodoro")
+	fmt.Println("  pomo                       # 25m pomodoro / 5m short / 10m long / 4 per cycle")
+	fmt.Println("  pomo -w 50                 # 50m pomodoro")
+	fmt.Println("  pomo -w 50 -s 10 -L 20    # 50m pomodoro, 10m short break, 20m long break")
+	fmt.Println("  pomo -c 3                  # long break every 3rd pomodoro")
 	fmt.Println("  pomo report            # weekly category summary (current week)")
 	fmt.Println("  pomo report --last     # previous week")
 	fmt.Println()
 	fmt.Println("Timer options:")
+	fmt.Println("  -w, --work                  Work (pomodoro) duration (default: 25m)")
 	fmt.Println("  -s, --short-break           Short break duration (default: 5m)")
 	fmt.Println("  -L, --long-break            Long break duration (default: 10m)")
 	fmt.Println("  -c, --per-cycle             Number of pomodoros between long breaks (default: 4)")

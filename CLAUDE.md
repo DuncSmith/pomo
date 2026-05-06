@@ -16,8 +16,8 @@ A Pomodoro timer CLI application built with Go using the Bubbletea TUI framework
 ```bash
 go build -o pomo ./cmd/pomo  # Build the executable
 ./pomo                       # Defaults: 25m pomodoro / 5m short / 10m long / 4 per cycle
-./pomo 50                    # 50m pomodoro
-./pomo 50 -s 10 -L 20        # 50m pomodoro, 10m short break, 20m long break
+./pomo -w 50                 # 50m pomodoro
+./pomo -w 50 -s 10 -L 20     # 50m pomodoro, 10m short break, 20m long break
 ./pomo -c 3                  # long break every 3rd pomodoro
 ./pomo --help                # Show usage information
 ./pomo --version             # Show version, commit, build date
@@ -129,7 +129,7 @@ go mod download              # Download dependencies
 - `recentTaskNames(tasks)`: Walks `tasks` in reverse, deduplicates, excludes the active task, returns at most 9 names most-recent-first
 
 **CLI**:
-- `parseArgs(args, cfg)`: Parses positional pomodoro duration + `--short-break`/`-s`, `--long-break`/`-L`, `--per-cycle`/`-c` flags; falls back to config values; validates each duration is positive and `--per-cycle ≥ 1`; handles `--help`/`-h`, `--version`/`-v`, and `report` subcommand
+- `parseArgs(args, cfg)`: Parses `--work`/`-w`, `--short-break`/`-s`, `--long-break`/`-L`, `--per-cycle`/`-c` flags; falls back to config values; validates each duration is positive and `--per-cycle ≥ 1`; handles `--help`/`-h`, `--version`/`-v`, and `report` subcommand; any unrecognised argument returns an error
 - `parseReportArgs(args)`: Parses `--last`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`; validates mutual exclusion of `--last` and `--from`/`--to`; validates `--from ≤ --to`
 - `parseDuration(arg)`: Accepts `"30"`, `"30m"`, `"30s"`; bare integer = minutes
 - `showHelp()`: Prints usage, examples, and options including the `report` subcommand
@@ -170,7 +170,7 @@ go mod download              # Download dependencies
 ### Command Line Interface
 
 ```
-pomo [pomodoro] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work] [--create-session-summary|--no-create-session-summary] [-h|--help] [-v|--version]
+pomo [-w duration] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work] [--create-session-summary|--no-create-session-summary] [-h|--help] [-v|--version]
 pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 ```
 

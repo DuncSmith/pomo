@@ -43,12 +43,12 @@ bin/build
 ./pomo
 
 # Custom pomodoro duration
-./pomo 50            # 50m pomodoro
-./pomo 30m           # 30m pomodoro
-./pomo 90s           # 90s pomodoro
+./pomo -w 50             # 50m pomodoro
+./pomo -w 30m            # 30m pomodoro
+./pomo -w 90s            # 90s pomodoro
 
 # Custom break durations and cycle length
-./pomo 50 -s 10 -L 20    # 50m pomodoro, 10m short break, 20m long break
+./pomo -w 50 -s 10 -L 20 # 50m pomodoro, 10m short break, 20m long break
 ./pomo -c 3              # long break every 3rd pomodoro
 
 # Auto-start the next pomodoro when a break ends
@@ -259,7 +259,7 @@ Edit the file to change any values; `pomo` picks them up on the next run.
 
 ## Duration Formats
 
-The timer accepts flexible duration formats:
+The `-w`/`--work` flag (and `-s`, `-L`) accept flexible duration formats:
 - `30` - 30 minutes (default unit)
 - `25m` - 25 minutes
 - `90s` - 90 seconds
