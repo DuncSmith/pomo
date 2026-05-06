@@ -8,16 +8,17 @@ When implementing from a plan file, work through every item in the Todo List in 
 
 ## Project Overview
 
-A Pomodoro timer CLI application built with Go using the Bubbletea TUI framework. Features a terminal UI with visual progress bars, pause/resume, interval naming, task tracking, session summaries (terminal + Markdown file), and system notifications.
+A Pomodoro timer CLI application built with Go using the Bubbletea TUI framework. Features a terminal UI with visual progress bars, pause/resume, pomodoro naming, task tracking, session summaries (terminal + Markdown file), and system notifications. Implements the classic technique: a pomodoro followed by a short break, with a long break after every N pomodoros (defaults: 25 / 5 / 10 / 4).
 
 ## Common Commands
 
 ### Build and Run
 ```bash
 go build -o pomo ./cmd/pomo  # Build the executable
-./pomo                       # Run with default 50m work / 10m rest (60m interval)
-./pomo 25                    # Run 25m work / 35m rest (60m interval)
-./pomo 45 --interval 90     # Run 45m work / 45m rest (90m interval)
+./pomo                       # Defaults: 25m pomodoro / 5m short / 10m long / 4 per cycle
+./pomo 50                    # 50m pomodoro
+./pomo 50 -s 10 -L 20        # 50m pomodoro, 10m short break, 20m long break
+./pomo -c 3                  # long break every 3rd pomodoro
 ./pomo --help                # Show usage information
 ./pomo --version             # Show version, commit, build date
 bin/build                    # Build versioned binary and install to ~/.local/bin
@@ -45,7 +46,7 @@ go mod download              # Download dependencies
   - `cmd/pomo/main.go` (~47 lines) — `main()` entry point only
   - `cmd/pomo/model.go` (~316 lines) — Types (`Model`, `Task`, message types), `Init`/`Update`/`View`, `formatTime`
   - `cmd/pomo/tasks.go` (~159 lines) — Task management (`activeTask`, `endActiveTask`, `startTask`, `recentTaskNames`), input handlers (`handleNamingInput`, `handleTaskInput`, `handleCategoryInput`)
-  - `cmd/pomo/timer.go` (~74 lines) — Phase/interval logic (`phaseDuration`, `generateIntervalName`, `transitionToRest`, `transitionToWork`, `resetInterval`)
+  - `cmd/pomo/timer.go` — Phase logic (`phaseDuration`, `currentBreakDuration`, `generatePomodoroName`, `transitionToBreak`, `transitionToPomodoro`, `resetPomodoro`)
   - `cmd/pomo/config.go` — `Config` type, YAML config loading/writing, `processCategories`, `processWorkDays`
   - `cmd/pomo/cli.go` — Version vars, `parseArgsResult`, `reportArgs`, argument parsing, help text
   - `cmd/pomo/summary.go` (~245 lines) — Session summary output (terminal + Markdown file), `groupTasksByCategory`, `computeTaskTotals`, `buildFrontmatter`, `formatDurationHuman`
@@ -58,8 +59,11 @@ go mod download              # Download dependencies
 ### Types
 
 **`Config`** — User preferences loaded from `~/.config/pomo/config.yaml` (XDG-compliant):
-- `WorkTime` (YAML: `work_time`, default `50`): Default work phase minutes
-- `IntervalTime` (YAML: `interval_time`, default `60`): Default total interval minutes
+- `PomodoroTime` (YAML: `pomodoro_time`, default `25`): Pomodoro (work) phase minutes
+- `ShortBreakTime` (YAML: `short_break_time`, default `5`): Short break minutes
+- `LongBreakTime` (YAML: `long_break_time`, default `10`): Long break minutes
+- `PomodorosPerCycle` (YAML: `pomodoros_per_cycle`, default `4`): Number of pomodoros between long breaks
+- `AutoStartWork` (YAML: `auto_start_work`, default `false`): Automatically start the next pomodoro when a break ends
 - `SessionSummary` (YAML: `session_summary`, nested block via `SessionSummary` type):
   - `Create` (YAML: `create_session_summary`, default `true`): Whether to write a Markdown summary file on quit
   - `Folder` (YAML: `summary_folder`, default `"~/pomos"`): Where to write Markdown session summaries
@@ -69,23 +73,23 @@ go mod download              # Download dependencies
   - `WorkDays` (YAML: `work_days`, default `["Mon", "Tue", "Wed", "Thu", "Fri"]`): Which weekdays define the report window. Valid values: `Mon Tue Wed Thu Fri Sat Sun`. Invalid entries warn to stderr and are skipped; an empty result falls back to the Mon–Fri default.
 
 **`Model`** — Central Bubbletea state:
-- `workDuration`, `restDuration`, `intervalDuration`: Phase configuration
+- `pomodoroDuration`, `shortBreakDuration`, `longBreakDuration`, `pomodorosPerCycle`: Phase configuration
 - `remaining`: Time left in current phase
-- `isRest`: Distinguishes work vs. break phase
+- `isRest`: Distinguishes work (pomodoro) vs. break phase
 - `paused`: Pause state
-- `intervalsCompleted`: Count of fully completed work+rest cycles
+- `pomodorosCompleted`: Count of fully completed pomodoro+break cycles
 - `totalWorked`, `totalRested`: Cumulative time for session summary
 - `progress`: Bubbles progress bar component (pointer)
 - `quitting`: Set on user quit; triggers summary output in `main()`
-- `currentIntervalName`: Display name for the current work interval (e.g. `"Morning #1"`)
-- `namingMode` / `nameInput`: State for the inline interval rename prompt
+- `currentPomodoroName`: Display name for the current pomodoro (e.g. `"Morning #1"`)
+- `namingMode` / `nameInput`: State for the inline pomodoro rename prompt
 - `taskMode` / `taskInput`: State for the inline task name input prompt
 - `recentTasks []string`: Recent unique task names populated when entering task mode; cleared on exit
 - `categoryMode bool` / `pendingTask string`: State for the category picker (step 2 of task creation); `pendingTask` holds the confirmed task name from step 1 until a category is selected or the step is cancelled
 - `categories []string`: Categories loaded from config, set in `main()` after parsing; nil/empty means category step is skipped
 - `tasks []Task`: Append-only log of all task records for the session
 - `startedAt`: Session start timestamp (used to name the summary file)
-- `intervalStartedAt`: Timestamp when the current work interval began; used by `resetInterval()` to identify which tasks to discard
+- `pomodoroStartedAt`: Timestamp when the current pomodoro began; used by `resetPomodoro()` to identify which tasks to discard
 
 **`Task`** — Named unit of work:
 - `Name string`: User-provided task name
@@ -103,14 +107,15 @@ go mod download              # Download dependencies
 **Bubbletea lifecycle**:
 - `Init()`: Returns `tickCmd()` to start the 1-second tick loop
 - `Update()`: Dispatches on message type; delegates to `handleNamingInput()` / `handleTaskInput()` / `handleCategoryInput()` when those modes are active
-- `View()`: Returns `tea.View` (via `tea.NewView()`); renders naming/task/category prompts, or the main timer UI (header, interval name, countdown, progress bar, active task with optional `[category]` tag, key hints)
-- `phaseDuration()`: Returns `workDuration` or `restDuration` based on `isRest`
+- `View()`: Returns `tea.View` (via `tea.NewView()`); renders naming/task/category prompts, or the main timer UI (header, pomodoro name, countdown, progress bar, active task with optional `[category]` tag, key hints)
+- `phaseDuration()`: Returns `pomodoroDuration` during work, or `currentBreakDuration()` during a break
+- `currentBreakDuration()`: Returns `longBreakDuration` when the just-completed pomodoro is a multiple of `pomodorosPerCycle`, otherwise `shortBreakDuration`
 
 **Phase transitions**:
-- `transitionToRest(elapsed, now)`: Accumulates `elapsed` work time, sets `isRest=true`, ends active task at `now`, clears `categoryMode`/`pendingTask`
-- `transitionToWork(elapsed, now)`: Accumulates `elapsed` rest time, increments counter, generates new interval name, continues last task name **and category** into a new Task entry
-- `resetInterval()`: Resets the current work interval — restores `remaining` to `workDuration`, removes tasks started during this interval (`StartedAt >= intervalStartedAt`), does NOT accumulate elapsed time into `totalWorked`, clears all input modes
-- `generateIntervalName(n, now)`: Produces `"Morning #N"` / `"Afternoon #N"` / `"Evening #N"` / `"Night #N"` based on time of day
+- `transitionToBreak(elapsed, now)`: Accumulates `elapsed` work time, sets `isRest=true`, sets `remaining` to either the short or long break (via `currentBreakDuration()`), ends active task at `now`, clears `categoryMode`/`pendingTask`
+- `transitionToPomodoro(elapsed, now)`: Accumulates `elapsed` rest time, increments `pomodorosCompleted`, generates new pomodoro name, continues last task name **and category** into a new Task entry
+- `resetPomodoro()`: Resets the current pomodoro — restores `remaining` to `pomodoroDuration`, removes tasks started during this pomodoro (`StartedAt >= pomodoroStartedAt`), does NOT accumulate elapsed time into `totalWorked`, clears all input modes
+- `generatePomodoroName(n, now)`: Produces `"Morning #N"` / `"Afternoon #N"` / `"Evening #N"` / `"Night #N"` based on time of day
 
 **Task tracking** (pointer receivers, mutate in place):
 - `activeTask()`: Returns pointer to the last task with a zero `EndedAt`, or nil
@@ -124,13 +129,13 @@ go mod download              # Download dependencies
 - `recentTaskNames(tasks)`: Walks `tasks` in reverse, deduplicates, excludes the active task, returns at most 9 names most-recent-first
 
 **CLI**:
-- `parseArgs(args, cfg)`: Parses positional work duration + `--interval`/`-i` flag; falls back to config values; validates constraints; handles `--help`/`-h`, `--version`/`-v`, and `report` subcommand
+- `parseArgs(args, cfg)`: Parses positional pomodoro duration + `--short-break`/`-s`, `--long-break`/`-L`, `--per-cycle`/`-c` flags; falls back to config values; validates each duration is positive and `--per-cycle ≥ 1`; handles `--help`/`-h`, `--version`/`-v`, and `report` subcommand
 - `parseReportArgs(args)`: Parses `--last`, `--from YYYY-MM-DD`, `--to YYYY-MM-DD`; validates mutual exclusion of `--last` and `--from`/`--to`; validates `--from ≤ --to`
 - `parseDuration(arg)`: Accepts `"30"`, `"30m"`, `"30s"`; bare integer = minutes
 - `showHelp()`: Prints usage, examples, and options including the `report` subcommand
 
 **Output**:
-- `printSummary(m)`: Prints intervals completed, total work/rest, and task time. When `m.categories` is non-empty, renders a grouped view (categories sorted by total duration desc, uncategorised last); otherwise renders the original flat list sorted alphabetically
+- `printSummary(m)`: Prints pomodoros completed, total work/rest, and task time. When `m.categories` is non-empty, renders a grouped view (categories sorted by total duration desc, uncategorised last); otherwise renders the original flat list sorted alphabetically
 - `writeSummaryFile(m, cfg)`: Writes the same content as a Markdown file to `cfg.SummaryFolder/<startedAt>.md`; skips if `cfg.SessionSummary.Create` is false; grouped format uses `**category** (duration)` headers when categories are configured
 - `groupTasksByCategory(tasks)`: Returns `[]categoryGroup` (each with `category`, `total`, `tasks []taskSummary`), sorted by total desc with uncategorised (`""`) forced last; preserves per-category task insertion order
 - `formatGroupHeader(category, total)`: Renders `"category  ──────  duration"` using `─` (U+2500) to fill a fixed 48-char line width
@@ -160,18 +165,18 @@ go mod download              # Download dependencies
 - `runReport(cfg, args)`: Orchestrates `openDB` → `resolveReportWindow` → `queryWeeklyTotals` → `printWeeklyReport` → `writeWeeklyReportFile`; DB error here is fatal with a clear message pointing to the DB path
 
 **Notifications**:
-- `sendNotification(isRest, intervalName)`: macOS uses `terminal-notifier`; Linux uses `notify-send`; errors are non-fatal
+- `sendNotification(isRest, pomodoroName)`: macOS uses `terminal-notifier`; Linux uses `notify-send`; errors are non-fatal
 
 ### Command Line Interface
 
 ```
-pomo [duration] [--interval duration] [--create-session-summary|--no-create-session-summary] [-h|--help] [-v|--version]
+pomo [pomodoro] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work] [--create-session-summary|--no-create-session-summary] [-h|--help] [-v|--version]
 pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]
 ```
 
 Duration formats: `30` (minutes), `30m`, `30s`. Defaults come from config file.
 
-Validation: work > 0, interval > 0, work < interval. Rest = interval − work.
+Validation: pomodoro > 0, short-break > 0, long-break > 0, per-cycle ≥ 1.
 
 The `--create-session-summary` / `--no-create-session-summary` flags override `cfg.SessionSummary.Create` for that run only; omitting them leaves the config value unchanged. The override is stored as `*bool` in `parseArgsResult` (nil = use config).
 
@@ -183,10 +188,10 @@ Report flag validation: `--last` and `--from`/`--to` are mutually exclusive; `--
 |-----|--------|
 | `Space` | Toggle pause/resume |
 | `q` / `Ctrl+C` | Quit; print session summary |
-| `n` | Enter naming mode (rename current work interval; pre-fills current name) |
+| `n` | Enter naming mode (rename current pomodoro; pre-fills current name) |
 | `a` | Enter task mode (add/switch task; work phase only) |
 | `s` | Skip current phase immediately |
-| `r` | Reset current work interval (discards elapsed time and interval tasks; work phase only) |
+| `r` | Reset current pomodoro (discards elapsed time and pomodoro tasks; work phase only) |
 | `Enter` | Confirm input (naming / task mode) |
 | `Esc` | Cancel input (naming / task / category mode); at category step discards the pending task entirely |
 | `Backspace` / `Delete` | Remove last character (UTF-8 rune-aware) |
@@ -194,8 +199,8 @@ Report flag validation: `--last` and `--from`/`--to` are mutually exclusive; `--
 
 ### Testing Strategy
 
-- ~55 test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go`, `db_test.go`, `report_test.go` (white-box, `package main`)
-- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, quit with partial progress, task tracking, naming/task input modes, config loading, interval name generation, frontmatter generation, recent task picker, reset interval
+- Test functions split across `main_test.go`, `config_test.go`, `cli_test.go`, `summary_test.go`, `db_test.go`, `report_test.go` (white-box, `package main`)
+- Covers: `parseDuration`, `formatTime`, `formatDurationHuman`, `parseArgs`, `--create-session-summary` flag, phase transitions, long-break selection (`TestTransitionToBreakUsesLongBreakAfterPerCycle`, `TestPhaseDurationLongBreak`), quit with partial progress, task tracking, naming/task input modes, config loading, pomodoro name generation, frontmatter generation, recent task picker, reset pomodoro
 - DB tests: schema creation, round-trip session+task insert, active-task skipping, empty-task session
 - Report tests: window resolution (current week, last week, explicit range, custom work days), weekly total aggregation, uncategorised-last sort, filename format
 - Category behaviour degrades gracefully in all existing tests: models without `categories` set bypass `categoryMode` and exercise the original task flow unchanged

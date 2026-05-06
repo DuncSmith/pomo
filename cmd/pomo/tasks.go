@@ -71,11 +71,11 @@ func recentTaskNames(tasks []Task) []string {
 	return names
 }
 
-// handleNamingInput processes keyboard input while in naming mode (interval rename).
+// handleNamingInput processes keyboard input while in naming mode (pomodoro rename).
 func (m Model) handleNamingInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch msg.Code {
 	case tea.KeyEnter:
-		m.currentIntervalName = m.nameInput
+		m.currentPomodoroName = m.nameInput
 		m.namingMode = false
 		m.nameInput = ""
 	case tea.KeyEscape:

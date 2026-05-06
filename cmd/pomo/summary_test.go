@@ -91,12 +91,13 @@ func TestWriteSummaryFileIncludesFrontmatter(t *testing.T) {
 
 	m := Model{
 		startedAt:          startedAt,
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalDuration:   60 * time.Minute,
-		intervalsCompleted: 2,
-		totalWorked:        100 * time.Minute,
-		totalRested:        20 * time.Minute,
+		pomodoroDuration:   25 * time.Minute,
+		shortBreakDuration: 5 * time.Minute,
+		longBreakDuration:  10 * time.Minute,
+		pomodorosPerCycle:  4,
+		pomodorosCompleted: 2,
+		totalWorked:        50 * time.Minute,
+		totalRested:        10 * time.Minute,
 		tasks:              []Task{},
 	}
 
@@ -142,12 +143,13 @@ func TestWriteSummaryFileOmitsTagsWhenEmpty(t *testing.T) {
 
 	m := Model{
 		startedAt:          startedAt,
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalDuration:   60 * time.Minute,
-		intervalsCompleted: 1,
-		totalWorked:        50 * time.Minute,
-		totalRested:        10 * time.Minute,
+		pomodoroDuration:   25 * time.Minute,
+		shortBreakDuration: 5 * time.Minute,
+		longBreakDuration:  10 * time.Minute,
+		pomodorosPerCycle:  4,
+		pomodorosCompleted: 1,
+		totalWorked:        25 * time.Minute,
+		totalRested:        5 * time.Minute,
 		tasks:              []Task{},
 	}
 
@@ -184,12 +186,13 @@ func TestWriteSummaryFileCustomTags(t *testing.T) {
 
 	m := Model{
 		startedAt:          startedAt,
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalDuration:   60 * time.Minute,
-		intervalsCompleted: 1,
-		totalWorked:        50 * time.Minute,
-		totalRested:        10 * time.Minute,
+		pomodoroDuration:   25 * time.Minute,
+		shortBreakDuration: 5 * time.Minute,
+		longBreakDuration:  10 * time.Minute,
+		pomodorosPerCycle:  4,
+		pomodorosCompleted: 1,
+		totalWorked:        25 * time.Minute,
+		totalRested:        5 * time.Minute,
 		tasks:              []Task{},
 	}
 

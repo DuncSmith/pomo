@@ -13,7 +13,7 @@ import (
 type tickMsg time.Time
 type finishedMsg struct{}
 
-// Task represents a named unit of work assigned to an interval.
+// Task represents a named unit of work assigned to a pomodoro.
 type Task struct {
 	Name      string
 	Category  string // empty means uncategorised
@@ -22,21 +22,19 @@ type Task struct {
 }
 
 type Model struct {
-	workDuration        time.Duration
-	restDuration        time.Duration
-	intervalDuration    time.Duration
-	lunchDuration       time.Duration
+	pomodoroDuration    time.Duration
+	shortBreakDuration  time.Duration
+	longBreakDuration   time.Duration
+	pomodorosPerCycle   int
 	remaining           time.Duration
 	isRest              bool
-	isLunch             bool
-	lunchReady          bool
 	paused              bool
-	intervalsCompleted  int
+	pomodorosCompleted  int
 	totalWorked         time.Duration
 	totalRested         time.Duration
 	progress            *progress.Model
 	quitting            bool
-	currentIntervalName string
+	currentPomodoroName string
 	namingMode          bool
 	nameInput           string
 	tasks               []Task
@@ -50,7 +48,7 @@ type Model struct {
 	restFinishedAt      time.Time
 	autoStartWork       bool
 	startedAt           time.Time
-	intervalStartedAt   time.Time
+	pomodoroStartedAt   time.Time
 	width               int // terminal width, updated via WindowSizeMsg
 }
 
@@ -95,25 +93,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if waited < 0 {
 				waited = 0
 			}
+			breakDuration := m.phaseDuration()
 			m.waitingForWorkStart = false
 			m.restFinishedAt = time.Time{}
-			m = m.transitionToWork(m.restDuration+waited, now)
+			m = m.transitionToPomodoro(breakDuration+waited, now)
 			// Don't return tickCmd() here — the tick loop is already running
 			// from when waitingForWorkStart was set. Returning another tickCmd
 			// would create a duplicate tick chain, doubling the countdown speed.
 			return m, nil
-		}
-		if m.lunchReady {
-			switch msg.String() {
-			case "space", "enter":
-				now := time.Now()
-				m = m.transitionToWork(m.lunchDuration, now)
-				return m, tickCmd()
-			case "q", "ctrl+c":
-				// fall through to quit handler below
-			default:
-				return m, nil
-			}
 		}
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -132,7 +119,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "n":
 			if !m.isRest {
 				m.namingMode = true
-				m.nameInput = m.currentIntervalName // Pre-fill with current name
+				m.nameInput = m.currentPomodoroName // Pre-fill with current name
 			}
 			return m, nil
 		case "a":
@@ -142,17 +129,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.taskInput = ""
 			}
 			return m, nil
-		case "l":
-			if !m.isRest {
-				now := time.Now()
-				elapsed := m.workDuration - m.remaining
-				m = m.transitionToLunch(elapsed, now)
-				return m, nil
-			}
-			return m, nil
 		case "r":
-			if !m.isRest && !m.isLunch {
-				m = m.resetInterval()
+			if !m.isRest {
+				m = m.resetPomodoro()
 				return m, nil
 			}
 			return m, nil
@@ -160,13 +139,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			now := time.Now()
 			elapsed := m.phaseDuration() - m.remaining
 			wasRest := m.isRest
-			wasLunch := m.isLunch
 			if m.isRest {
-				m = m.transitionToWork(elapsed, now)
+				m = m.transitionToPomodoro(elapsed, now)
 			} else {
-				m = m.transitionToRest(elapsed, now)
+				m = m.transitionToBreak(elapsed, now)
 			}
-			go sendNotification(wasRest, wasLunch, m.currentIntervalName)
+			go sendNotification(wasRest, m.currentPomodoroName)
 			return m, nil
 		}
 	case tea.WindowSizeMsg:
@@ -185,24 +163,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case finishedMsg:
 		now := time.Now()
 		wasRest := m.isRest
-		wasLunch := m.isLunch
-		if m.isLunch {
-			m.lunchReady = true
-			go sendNotification(wasRest, wasLunch, m.currentIntervalName)
-			return m, nil
-		} else if m.isRest {
+		if m.isRest {
+			breakDuration := m.phaseDuration()
 			if m.autoStartWork {
-				m = m.transitionToWork(m.restDuration, now)
+				m = m.transitionToPomodoro(breakDuration, now)
 			} else {
 				m.waitingForWorkStart = true
 				m.restFinishedAt = now
-				go sendNotification(wasRest, wasLunch, m.currentIntervalName)
+				go sendNotification(wasRest, m.currentPomodoroName)
 				return m, tickCmd()
 			}
 		} else {
-			m = m.transitionToRest(m.workDuration, now)
+			m = m.transitionToBreak(m.pomodoroDuration, now)
 		}
-		go sendNotification(wasRest, wasLunch, m.currentIntervalName)
+		go sendNotification(wasRest, m.currentPomodoroName)
 		return m, tickCmd()
 	}
 	return m, nil
@@ -213,16 +187,8 @@ func (m Model) View() tea.View {
 
 	// ── Special input modes (minimal UI, unchanged behaviour) ─────────
 	if m.namingMode {
-		s.WriteString(fmt.Sprintf("Rename interval: %s_\n", m.nameInput))
+		s.WriteString(fmt.Sprintf("Rename pomodoro: %s_\n", m.nameInput))
 		s.WriteString("\n[enter] confirm   [esc] cancel\n")
-		return tea.NewView(s.String())
-	}
-
-	if m.lunchReady {
-		s.WriteString("🥪 Lunch Break\n\n")
-		s.WriteString("Lunch is over!\n\n")
-		s.WriteString("Press [enter] or [space] to resume work\n")
-		s.WriteString("[q] to quit\n")
 		return tea.NewView(s.String())
 	}
 
@@ -274,25 +240,23 @@ func (m Model) View() tea.View {
 	phaseDur := m.phaseDuration()
 	var phase, emoji, sessionName string
 	switch {
-	case m.isLunch:
-		phase, emoji, sessionName = "lunch", "🥪", "Lunch Break"
 	case m.isRest:
 		phase, emoji, sessionName = "rest", "☕", "Break Timer"
 	default:
 		phase, emoji = "work", "🍅"
-		sessionName = m.currentIntervalName
+		sessionName = m.currentPomodoroName
 		if sessionName == "" {
-			sessionName = generateIntervalName(m.intervalsCompleted+1, time.Now())
+			sessionName = generatePomodoroName(m.pomodorosCompleted+1, time.Now())
 		}
 	}
 
 	// ── 1 & 2. BREADCRUMB + HEADER with right-aligned badge ───────────
 	crumbs := dimSt.Render("pomo › " + strings.ToLower(sessionName) + " › " + phase)
 	var badgeText string
-	if m.isRest || m.isLunch {
+	if m.isRest {
 		badgeText = fmt.Sprintf("%.0f MIN BREAK", phaseDur.Minutes())
 	} else {
-		badgeText = fmt.Sprintf("%.0f MIN FOCUS", m.workDuration.Minutes())
+		badgeText = fmt.Sprintf("%.0f MIN FOCUS", m.pomodoroDuration.Minutes())
 	}
 	badge := badgeSt.Render(badgeText)
 	badgeLines := strings.Split(badge, "\n")
@@ -353,7 +317,7 @@ func (m Model) View() tea.View {
 
 	// ── 5. TASK ROW ───────────────────────────────────────────────────
 	s.WriteByte('\n')
-	if !m.isRest && !m.isLunch {
+	if !m.isRest {
 		var taskLeft string
 		if t := m.activeTask(); t != nil {
 			if t.Category != "" {

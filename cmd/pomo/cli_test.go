@@ -118,71 +118,96 @@ func TestParseDuration(t *testing.T) {
 
 func TestParseArgs(t *testing.T) {
 	tests := []struct {
-		name         string
-		args         []string
-		expectError  bool
-		expectAction string
-		workDuration time.Duration
-		restDuration time.Duration
-		intervalDur  time.Duration
-		autoStart    bool
+		name              string
+		args              []string
+		expectError       bool
+		expectAction      string
+		pomodoroDuration  time.Duration
+		shortBreak        time.Duration
+		longBreak         time.Duration
+		pomodorosPerCycle int
+		autoStart         bool
 	}{
 		{
-			name:         "defaults (no args)",
-			args:         []string{},
-			workDuration: 50 * time.Minute,
-			restDuration: 10 * time.Minute,
-			intervalDur:  60 * time.Minute,
+			name:              "defaults (no args)",
+			args:              []string{},
+			pomodoroDuration:  25 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
-			name:         "custom work duration (bare number)",
-			args:         []string{"25"},
-			workDuration: 25 * time.Minute,
-			restDuration: 35 * time.Minute,
-			intervalDur:  60 * time.Minute,
+			name:              "custom pomodoro duration (bare number)",
+			args:              []string{"50"},
+			pomodoroDuration:  50 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
-			name:         "custom work duration (with m suffix)",
-			args:         []string{"30m"},
-			workDuration: 30 * time.Minute,
-			restDuration: 30 * time.Minute,
-			intervalDur:  60 * time.Minute,
+			name:              "custom pomodoro duration (with m suffix)",
+			args:              []string{"30m"},
+			pomodoroDuration:  30 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
-			name:         "custom work duration (seconds)",
-			args:         []string{"90s"},
-			workDuration: 90 * time.Second,
-			restDuration: 60*time.Minute - 90*time.Second,
-			intervalDur:  60 * time.Minute,
+			name:              "custom pomodoro duration (seconds)",
+			args:              []string{"90s"},
+			pomodoroDuration:  90 * time.Second,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
-			name:         "custom interval",
-			args:         []string{"--interval", "90"},
-			workDuration: 50 * time.Minute,
-			restDuration: 40 * time.Minute,
-			intervalDur:  90 * time.Minute,
+			name:              "custom short break",
+			args:              []string{"--short-break", "8"},
+			pomodoroDuration:  25 * time.Minute,
+			shortBreak:        8 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
-			name:         "custom work and interval",
-			args:         []string{"45", "-i", "90"},
-			workDuration: 45 * time.Minute,
-			restDuration: 45 * time.Minute,
-			intervalDur:  90 * time.Minute,
+			name:              "custom long break",
+			args:              []string{"--long-break", "20"},
+			pomodoroDuration:  25 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         20 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
-			name:         "auto start work flag",
-			args:         []string{"--auto-start-work"},
-			workDuration: 50 * time.Minute,
-			restDuration: 10 * time.Minute,
-			intervalDur:  60 * time.Minute,
-			autoStart:    true,
+			name:              "custom per-cycle",
+			args:              []string{"--per-cycle", "3"},
+			pomodoroDuration:  25 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 3,
 		},
 		{
-			name:         "interval with m suffix",
-			args:         []string{"30", "--interval", "75m"},
-			workDuration: 30 * time.Minute,
-			restDuration: 45 * time.Minute,
-			intervalDur:  75 * time.Minute,
+			name:              "all flags combined",
+			args:              []string{"50", "-s", "10", "-L", "20", "-c", "3"},
+			pomodoroDuration:  50 * time.Minute,
+			shortBreak:        10 * time.Minute,
+			longBreak:         20 * time.Minute,
+			pomodorosPerCycle: 3,
+		},
+		{
+			name:              "auto start work flag",
+			args:              []string{"--auto-start-work"},
+			pomodoroDuration:  25 * time.Minute,
+			shortBreak:        5 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
+			autoStart:         true,
+		},
+		{
+			name:              "short break with m suffix",
+			args:              []string{"30", "--short-break", "7m"},
+			pomodoroDuration:  30 * time.Minute,
+			shortBreak:        7 * time.Minute,
+			longBreak:         10 * time.Minute,
+			pomodorosPerCycle: 4,
 		},
 		{
 			name:         "help flag",
@@ -205,18 +230,38 @@ func TestParseArgs(t *testing.T) {
 			expectAction: "version",
 		},
 		{
-			name:        "invalid work duration",
+			name:        "invalid pomodoro duration",
 			args:        []string{"abc"},
 			expectError: true,
 		},
 		{
-			name:        "invalid interval duration",
-			args:        []string{"--interval", "xyz"},
+			name:        "invalid short-break duration",
+			args:        []string{"--short-break", "xyz"},
 			expectError: true,
 		},
 		{
-			name:        "missing interval value",
-			args:        []string{"--interval"},
+			name:        "missing short-break value",
+			args:        []string{"--short-break"},
+			expectError: true,
+		},
+		{
+			name:        "invalid long-break duration",
+			args:        []string{"--long-break", "xyz"},
+			expectError: true,
+		},
+		{
+			name:        "missing long-break value",
+			args:        []string{"--long-break"},
+			expectError: true,
+		},
+		{
+			name:        "invalid per-cycle value",
+			args:        []string{"--per-cycle", "abc"},
+			expectError: true,
+		},
+		{
+			name:        "missing per-cycle value",
+			args:        []string{"--per-cycle"},
 			expectError: true,
 		},
 		{
@@ -225,23 +270,23 @@ func TestParseArgs(t *testing.T) {
 			expectError: true,
 		},
 		{
-			name:        "zero work duration",
+			name:        "zero pomodoro duration",
 			args:        []string{"0"},
 			expectError: true,
 		},
 		{
-			name:        "zero interval",
-			args:        []string{"-i", "0"},
+			name:        "zero short break",
+			args:        []string{"-s", "0"},
 			expectError: true,
 		},
 		{
-			name:        "work duration >= interval",
-			args:        []string{"60", "-i", "60"},
+			name:        "zero long break",
+			args:        []string{"-L", "0"},
 			expectError: true,
 		},
 		{
-			name:        "work duration > interval",
-			args:        []string{"70", "-i", "60"},
+			name:        "zero per-cycle",
+			args:        []string{"-c", "0"},
 			expectError: true,
 		},
 	}
@@ -276,23 +321,26 @@ func TestParseArgs(t *testing.T) {
 				t.Fatal("Expected model to be populated")
 			}
 			m := result.model
-			if m.workDuration != tt.workDuration {
-				t.Errorf("Expected workDuration %v, got %v", tt.workDuration, m.workDuration)
+			if m.pomodoroDuration != tt.pomodoroDuration {
+				t.Errorf("Expected pomodoroDuration %v, got %v", tt.pomodoroDuration, m.pomodoroDuration)
 			}
-			if m.restDuration != tt.restDuration {
-				t.Errorf("Expected restDuration %v, got %v", tt.restDuration, m.restDuration)
+			if m.shortBreakDuration != tt.shortBreak {
+				t.Errorf("Expected shortBreakDuration %v, got %v", tt.shortBreak, m.shortBreakDuration)
 			}
-			if m.intervalDuration != tt.intervalDur {
-				t.Errorf("Expected intervalDuration %v, got %v", tt.intervalDur, m.intervalDuration)
+			if m.longBreakDuration != tt.longBreak {
+				t.Errorf("Expected longBreakDuration %v, got %v", tt.longBreak, m.longBreakDuration)
 			}
-			if m.remaining != tt.workDuration {
-				t.Errorf("Expected remaining to match workDuration %v, got %v", tt.workDuration, m.remaining)
+			if m.pomodorosPerCycle != tt.pomodorosPerCycle {
+				t.Errorf("Expected pomodorosPerCycle %d, got %d", tt.pomodorosPerCycle, m.pomodorosPerCycle)
+			}
+			if m.remaining != tt.pomodoroDuration {
+				t.Errorf("Expected remaining to match pomodoroDuration %v, got %v", tt.pomodoroDuration, m.remaining)
 			}
 			if m.isRest {
 				t.Error("Expected isRest to be false initially")
 			}
-			if m.intervalsCompleted != 0 {
-				t.Errorf("Expected intervalsCompleted to be 0, got %d", m.intervalsCompleted)
+			if m.pomodorosCompleted != 0 {
+				t.Errorf("Expected pomodorosCompleted to be 0, got %d", m.pomodorosCompleted)
 			}
 			if m.autoStartWork != tt.autoStart {
 				t.Errorf("Expected autoStartWork %v, got %v", tt.autoStart, m.autoStartWork)
@@ -303,9 +351,11 @@ func TestParseArgs(t *testing.T) {
 
 func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	cfg := Config{
-		WorkTime:      30,
-		IntervalTime:  75,
-		AutoStartWork: true,
+		PomodoroTime:      30,
+		ShortBreakTime:    7,
+		LongBreakTime:     15,
+		PomodorosPerCycle: 3,
+		AutoStartWork:     true,
 		SessionSummary: SessionSummary{
 			Folder: "~/pomos",
 			Create: true,
@@ -315,14 +365,17 @@ func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if result.model.workDuration != 30*time.Minute {
-		t.Errorf("Expected workDuration 30m from config, got %v", result.model.workDuration)
+	if result.model.pomodoroDuration != 30*time.Minute {
+		t.Errorf("Expected pomodoroDuration 30m from config, got %v", result.model.pomodoroDuration)
 	}
-	if result.model.intervalDuration != 75*time.Minute {
-		t.Errorf("Expected intervalDuration 75m from config, got %v", result.model.intervalDuration)
+	if result.model.shortBreakDuration != 7*time.Minute {
+		t.Errorf("Expected shortBreakDuration 7m from config, got %v", result.model.shortBreakDuration)
 	}
-	if result.model.restDuration != 45*time.Minute {
-		t.Errorf("Expected restDuration 45m (75-30), got %v", result.model.restDuration)
+	if result.model.longBreakDuration != 15*time.Minute {
+		t.Errorf("Expected longBreakDuration 15m from config, got %v", result.model.longBreakDuration)
+	}
+	if result.model.pomodorosPerCycle != 3 {
+		t.Errorf("Expected pomodorosPerCycle 3 from config, got %d", result.model.pomodorosPerCycle)
 	}
 	if !result.model.autoStartWork {
 		t.Error("Expected autoStartWork true from config")
@@ -369,21 +422,29 @@ func TestParseArgsCreateSessionSummaryFlag(t *testing.T) {
 
 func TestParseArgsCLIOverridesConfig(t *testing.T) {
 	cfg := Config{
-		WorkTime:     30,
-		IntervalTime: 75,
+		PomodoroTime:      30,
+		ShortBreakTime:    7,
+		LongBreakTime:     15,
+		PomodorosPerCycle: 3,
 		SessionSummary: SessionSummary{
 			Folder: "~/pomos",
 			Create: true,
 		},
 	}
-	result, err := parseArgs([]string{"45", "-i", "90"}, cfg)
+	result, err := parseArgs([]string{"45", "-s", "8", "-L", "20", "-c", "5"}, cfg)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if result.model.workDuration != 45*time.Minute {
-		t.Errorf("Expected CLI work 45m to override config 30m, got %v", result.model.workDuration)
+	if result.model.pomodoroDuration != 45*time.Minute {
+		t.Errorf("Expected CLI pomodoro 45m to override config 30m, got %v", result.model.pomodoroDuration)
 	}
-	if result.model.intervalDuration != 90*time.Minute {
-		t.Errorf("Expected CLI interval 90m to override config 75m, got %v", result.model.intervalDuration)
+	if result.model.shortBreakDuration != 8*time.Minute {
+		t.Errorf("Expected CLI short-break 8m to override config 7m, got %v", result.model.shortBreakDuration)
+	}
+	if result.model.longBreakDuration != 20*time.Minute {
+		t.Errorf("Expected CLI long-break 20m to override config 15m, got %v", result.model.longBreakDuration)
+	}
+	if result.model.pomodorosPerCycle != 5 {
+		t.Errorf("Expected CLI per-cycle 5 to override config 3, got %d", result.model.pomodorosPerCycle)
 	}
 }

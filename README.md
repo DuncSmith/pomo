@@ -39,64 +39,49 @@ bin/build
 
 ### Basic Usage
 ```bash
-# Start with defaults: 50m work (10m rest), repeating
+# Start with defaults: 25m pomodoro / 5m short break / 10m long break / 4 per cycle
 ./pomo
 
-# Custom work duration (rest = 60m interval − work)
-./pomo 25            # 25m work (35m rest)
-./pomo 30m           # 30m work (30m rest)
-./pomo 90s           # 90s work (58m30s rest)
+# Custom pomodoro duration
+./pomo 50            # 50m pomodoro
+./pomo 30m           # 30m pomodoro
+./pomo 90s           # 90s pomodoro
 
-# Custom interval duration (rest = interval − work)
-./pomo 45 --interval 90   # 45m work, 90m interval (45m rest)
-./pomo -i 90              # 50m work, 90m interval (40m rest)
+# Custom break durations and cycle length
+./pomo 50 -s 10 -L 20    # 50m pomodoro, 10m short break, 20m long break
+./pomo -c 3              # long break every 3rd pomodoro
 
-# Auto-start work when rest ends
+# Auto-start the next pomodoro when a break ends
 ./pomo --auto-start-work
 ```
 
-Rest time is always derived as **interval − work** and cannot be set directly.
+The timer runs **pomodoro → short break** repeatedly. After every `N`
+pomodoros (default `4`), the break is a **long break** instead. The cycle
+continues until you quit.
 
-The timer runs work → rest repeatedly until you quit.
-By default, when rest ends, pomo waits for a keypress before starting work.
-Use `--auto-start-work` (or config below) to start work immediately when rest ends.
+By default, when a break ends, pomo waits for a keypress before starting the next pomodoro.
+Use `--auto-start-work` (or config below) to start the next pomodoro immediately when a break ends.
+
 On exit, a session summary shows:
-- Intervals completed
+- Pomodoros completed
 - Total time worked and rested
 - Detailed time breakdown for each task tracked
 
 ### Keyboard Controls
 - `Space` - Pause/resume timer
 - `q` or `Ctrl+C` - Quit application
-- `n` - Name current work interval (press again to rename)
+- `n` - Rename the current pomodoro (press again to rename)
 - `a` - Add or switch current task (work phase only)
-- `s` - Skip current phase (work → rest or rest → work)
-- `r` - Reset current work interval: restores full work duration and discards all tasks started in this interval (work phase only)
-- `l` - Take a lunch break (work phase only)
+- `s` - Skip current phase (pomodoro → break or break → next pomodoro)
+- `r` - Reset current pomodoro: restores full pomodoro duration and discards all tasks started in this pomodoro (work phase only)
 
-### Interval Naming
+### Pomodoro Naming
 
-Each work interval is automatically named based on the time of day — e.g. "Morning #1", "Afternoon #2". This name is shown in the timer header.
+Each pomodoro is automatically named based on the time of day — e.g. "Morning #1", "Afternoon #2". This name is shown in the timer header.
 
-During a work phase, press `n` to rename the current interval. The prompt pre-fills the existing name; press Enter to confirm or Esc to cancel.
+During a pomodoro, press `n` to rename it. The prompt pre-fills the existing name; press Enter to confirm or Esc to cancel.
 
-Each new work interval gets a fresh auto-generated name. Renaming one interval does not carry the name forward to subsequent intervals.
-
-### Lunch Breaks
-
-During a work phase, press `l` to take a lunch break. This ends the current work interval early and starts a special lunch timer (default: 60 minutes).
-
-When the lunch timer expires, the app pauses and waits — it won't automatically start the next interval.
-
-Press `Enter` or `Space` when you're ready and a new work interval begins, with your previous task automatically resumed.
-
-You can also skip lunch early with `s`, or pause/resume it with `Space` like any other phase.
-
-**Configure the lunch duration** in `~/.config/pomo/config.yaml`:
-
-```yaml
-lunch_time: 60   # minutes (default: 60)
-```
+Each new pomodoro gets a fresh auto-generated name. Renaming one pomodoro does not carry the name forward to subsequent pomodoros.
 
 ### Tracking Tasks
 
@@ -134,8 +119,8 @@ The active task is shown in the timer view. If it has a category, the category a
 Task: write up quarterly notes  [strategy work]
 ```
 
-- Tasks are automatically ended when a rest phase begins or when you switch to a new task.
-- When a new work interval starts after a break, the previous task name **and category** are carried over automatically.
+- Tasks are automatically ended when a break begins or when you switch to a new task.
+- When a new pomodoro starts after a break, the previous task name **and category** are carried over automatically.
 - Your session summary includes a breakdown of time spent on each task.
 
 ### Weekly Reports
@@ -190,7 +175,7 @@ tags:
 ```
 
 The summary contains:
-- Intervals completed
+- Pomodoros completed
 - Total time worked and rested
 - Per-task time breakdown (if tasks were tracked)
 
@@ -213,10 +198,11 @@ Without categories configured, the original flat task list is shown.
 **Configuration:** Add a `session_summary` block to your config file (`~/.config/pomo/config.yaml`):
 
 ```yaml
-work_time: 50
-interval_time: 60
-lunch_time: 60
-auto-start-work-interval: false
+pomodoro_time: 25
+short_break_time: 5
+long_break_time: 10
+pomodoros_per_cycle: 4
+auto_start_work: false
 session_summary:
   create_session_summary: true
   summary_folder: ~/pomos
@@ -236,10 +222,14 @@ weekly_report:
 
 | Option | Description |
 |--------|-------------|
+| `pomodoro_time` | Pomodoro (work) duration in minutes (default: `25`) |
+| `short_break_time` | Short break duration in minutes (default: `5`) |
+| `long_break_time` | Long break duration in minutes (default: `10`) |
+| `pomodoros_per_cycle` | Number of pomodoros between long breaks (default: `4`) |
+| `auto_start_work` | Automatically start the next pomodoro as soon as a break ends (default: `false`) |
 | `create_session_summary` | Whether to write a Markdown file on quit (default: `true`) |
 | `summary_folder` | Directory for summary files (default: `~/pomos`) |
 | `summary_tags` | Custom tags for the frontmatter block. Omit to use defaults. Set to `[]` to omit the `tags` key entirely. |
-| `auto-start-work-interval` | Automatically start work as soon as rest ends (default: `false`) |
 | `categories` | List of task categories (up to 9). Omit or leave empty to disable the category step entirely. New installs include the defaults shown above. |
 | `weekly_report.work_days` | Weekdays that define the report window (default: `[Mon, Tue, Wed, Thu, Fri]`). Valid values: `Mon Tue Wed Thu Fri Sat Sun`. |
 

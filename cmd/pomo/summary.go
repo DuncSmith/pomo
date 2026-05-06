@@ -118,10 +118,11 @@ func computeTaskTotals(tasks []Task) (map[string]time.Duration, []string) {
 
 func printSummary(m Model) {
 	fmt.Println("\n📊 Session Summary")
-	fmt.Printf("  Intervals completed: %d\n", m.intervalsCompleted)
+	fmt.Printf("  Pomodoros completed: %d\n", m.pomodorosCompleted)
 	fmt.Printf("  Total worked: %s\n", formatDurationHuman(m.totalWorked))
 	fmt.Printf("  Total rested: %s\n", formatDurationHuman(m.totalRested))
-	fmt.Printf("  Interval: %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes())
+	fmt.Printf("  Pomodoro: %.0fm | short break: %.0fm | long break: %.0fm | per cycle: %d\n",
+		m.pomodoroDuration.Minutes(), m.shortBreakDuration.Minutes(), m.longBreakDuration.Minutes(), m.pomodorosPerCycle)
 
 	if len(m.categories) > 0 {
 		groups := groupTasksByCategory(m.tasks)
@@ -178,10 +179,11 @@ func writeSummaryFile(m Model, cfg Config) error {
 	sb.WriteString(frontmatter)
 
 	sb.WriteString(fmt.Sprintf("# Pomo Session — %s\n\n", m.startedAt.Format("2006-01-02 15:04:05")))
-	sb.WriteString(fmt.Sprintf("- **Intervals completed:** %d\n", m.intervalsCompleted))
+	sb.WriteString(fmt.Sprintf("- **Pomodoros completed:** %d\n", m.pomodorosCompleted))
 	sb.WriteString(fmt.Sprintf("- **Total worked:** %s\n", formatDurationHuman(m.totalWorked)))
 	sb.WriteString(fmt.Sprintf("- **Total rested:** %s\n", formatDurationHuman(m.totalRested)))
-	sb.WriteString(fmt.Sprintf("- **Interval:** %.0fm work | %.0fm rest\n", m.workDuration.Minutes(), m.restDuration.Minutes()))
+	sb.WriteString(fmt.Sprintf("- **Pomodoro:** %.0fm | short break: %.0fm | long break: %.0fm | per cycle: %d\n",
+		m.pomodoroDuration.Minutes(), m.shortBreakDuration.Minutes(), m.longBreakDuration.Minutes(), m.pomodorosPerCycle))
 
 	if len(m.categories) > 0 {
 		groups := groupTasksByCategory(m.tasks)

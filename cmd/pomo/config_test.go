@@ -11,14 +11,17 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SessionSummary.Folder != "~/pomos" {
 		t.Errorf("Expected SessionSummary.Folder '~/pomos', got %q", cfg.SessionSummary.Folder)
 	}
-	if cfg.WorkTime != 50 {
-		t.Errorf("Expected WorkTime 50, got %d", cfg.WorkTime)
+	if cfg.PomodoroTime != 25 {
+		t.Errorf("Expected PomodoroTime 25, got %d", cfg.PomodoroTime)
 	}
-	if cfg.IntervalTime != 60 {
-		t.Errorf("Expected IntervalTime 60, got %d", cfg.IntervalTime)
+	if cfg.ShortBreakTime != 5 {
+		t.Errorf("Expected ShortBreakTime 5, got %d", cfg.ShortBreakTime)
 	}
-	if cfg.LunchTime != 60 {
-		t.Errorf("Expected LunchTime 60, got %d", cfg.LunchTime)
+	if cfg.LongBreakTime != 10 {
+		t.Errorf("Expected LongBreakTime 10, got %d", cfg.LongBreakTime)
+	}
+	if cfg.PomodorosPerCycle != 4 {
+		t.Errorf("Expected PomodorosPerCycle 4, got %d", cfg.PomodorosPerCycle)
 	}
 	if cfg.AutoStartWork {
 		t.Error("Expected AutoStartWork to be false by default")
@@ -49,11 +52,17 @@ func TestLoadConfigCreatesDefaultOnFirstRun(t *testing.T) {
 
 	// Should return defaults
 	def := defaultConfig()
-	if cfg.WorkTime != def.WorkTime {
-		t.Errorf("Expected WorkTime %d, got %d", def.WorkTime, cfg.WorkTime)
+	if cfg.PomodoroTime != def.PomodoroTime {
+		t.Errorf("Expected PomodoroTime %d, got %d", def.PomodoroTime, cfg.PomodoroTime)
 	}
-	if cfg.IntervalTime != def.IntervalTime {
-		t.Errorf("Expected IntervalTime %d, got %d", def.IntervalTime, cfg.IntervalTime)
+	if cfg.ShortBreakTime != def.ShortBreakTime {
+		t.Errorf("Expected ShortBreakTime %d, got %d", def.ShortBreakTime, cfg.ShortBreakTime)
+	}
+	if cfg.LongBreakTime != def.LongBreakTime {
+		t.Errorf("Expected LongBreakTime %d, got %d", def.LongBreakTime, cfg.LongBreakTime)
+	}
+	if cfg.PomodorosPerCycle != def.PomodorosPerCycle {
+		t.Errorf("Expected PomodorosPerCycle %d, got %d", def.PomodorosPerCycle, cfg.PomodorosPerCycle)
 	}
 	if cfg.SessionSummary.Folder != def.SessionSummary.Folder {
 		t.Errorf("Expected SessionSummary.Folder %q, got %q", def.SessionSummary.Folder, cfg.SessionSummary.Folder)
@@ -78,7 +87,7 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Fatalf("Could not create config dir: %v", err)
 	}
 
-	content := "work_time: 25\ninterval_time: 45\nauto-start-work-interval: true\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
+	content := "pomodoro_time: 30\nshort_break_time: 7\nlong_break_time: 15\npomodoros_per_cycle: 3\nauto_start_work: true\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
 	configFile := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Could not write config file: %v", err)
@@ -92,11 +101,17 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	if cfg.SessionSummary.Folder != "/custom/path" {
 		t.Errorf("Expected SessionSummary.Folder '/custom/path', got %q", cfg.SessionSummary.Folder)
 	}
-	if cfg.WorkTime != 25 {
-		t.Errorf("Expected WorkTime 25, got %d", cfg.WorkTime)
+	if cfg.PomodoroTime != 30 {
+		t.Errorf("Expected PomodoroTime 30, got %d", cfg.PomodoroTime)
 	}
-	if cfg.IntervalTime != 45 {
-		t.Errorf("Expected IntervalTime 45, got %d", cfg.IntervalTime)
+	if cfg.ShortBreakTime != 7 {
+		t.Errorf("Expected ShortBreakTime 7, got %d", cfg.ShortBreakTime)
+	}
+	if cfg.LongBreakTime != 15 {
+		t.Errorf("Expected LongBreakTime 15, got %d", cfg.LongBreakTime)
+	}
+	if cfg.PomodorosPerCycle != 3 {
+		t.Errorf("Expected PomodorosPerCycle 3, got %d", cfg.PomodorosPerCycle)
 	}
 	if !cfg.AutoStartWork {
 		t.Error("Expected AutoStartWork to be true")
@@ -125,7 +140,7 @@ func TestLoadConfigParsesTags(t *testing.T) {
 		t.Fatalf("Could not create config dir: %v", err)
 	}
 
-	content := "work_time: 25\ninterval_time: 45\nsession_summary:\n  create_session_summary: true\n  summary_folder: /custom/path\n  summary_tags:\n    - tag\n    - another\n"
+	content := "pomodoro_time: 25\nshort_break_time: 5\nsession_summary:\n  create_session_summary: true\n  summary_folder: /custom/path\n  summary_tags:\n    - tag\n    - another\n"
 	configFile := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Could not write config file: %v", err)

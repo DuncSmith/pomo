@@ -6,17 +6,14 @@ import (
 	"runtime"
 )
 
-func sendNotification(isRest bool, isLunch bool, intervalName string) {
+func sendNotification(isRest bool, pomodoroName string) {
 	var title, message string
-	if isLunch {
-		title = "🥪 Lunch Break"
-		message = "Lunch is over! Ready to resume?"
-	} else if isRest {
+	if isRest {
 		title = "☕ Break Timer"
 		message = "Your break is complete!"
 	} else {
 		title = "🍅 Pomodoro Timer"
-		message = fmt.Sprintf("Pomodoro '%s' is complete!", intervalName)
+		message = fmt.Sprintf("Pomodoro '%s' is complete!", pomodoroName)
 	}
 
 	if runtime.GOOS == "darwin" {

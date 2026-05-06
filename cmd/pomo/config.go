@@ -23,13 +23,14 @@ type WeeklyReport struct {
 
 // Config holds user preferences loaded from the YAML config file.
 type Config struct {
-	WorkTime       int            `yaml:"work_time"`
-	IntervalTime   int            `yaml:"interval_time"`
-	LunchTime      int            `yaml:"lunch_time"`
-	AutoStartWork  bool           `yaml:"auto-start-work-interval"`
-	SessionSummary SessionSummary `yaml:"session_summary"`
-	Categories     []string       `yaml:"categories"`
-	WeeklyReport   WeeklyReport   `yaml:"weekly_report"`
+	PomodoroTime      int            `yaml:"pomodoro_time"`
+	ShortBreakTime    int            `yaml:"short_break_time"`
+	LongBreakTime     int            `yaml:"long_break_time"`
+	PomodorosPerCycle int            `yaml:"pomodoros_per_cycle"`
+	AutoStartWork     bool           `yaml:"auto_start_work"`
+	SessionSummary    SessionSummary `yaml:"session_summary"`
+	Categories        []string       `yaml:"categories"`
+	WeeklyReport      WeeklyReport   `yaml:"weekly_report"`
 }
 
 // builtinCategories are written to the config file on first run.
@@ -63,10 +64,11 @@ func processCategories(cats []string) []string {
 // defaultConfig returns the built-in default configuration.
 func defaultConfig() Config {
 	return Config{
-		WorkTime:      50,
-		IntervalTime:  60,
-		LunchTime:     60,
-		AutoStartWork: false,
+		PomodoroTime:      25,
+		ShortBreakTime:    5,
+		LongBreakTime:     10,
+		PomodorosPerCycle: 4,
+		AutoStartWork:     false,
 		SessionSummary: SessionSummary{
 			Create: true,
 			Folder: "~/pomos",

@@ -6,17 +6,24 @@ import (
 )
 
 func (m Model) phaseDuration() time.Duration {
-	if m.isLunch {
-		return m.lunchDuration
-	}
 	if m.isRest {
-		return m.restDuration
+		return m.currentBreakDuration()
 	}
-	return m.workDuration
+	return m.pomodoroDuration
 }
 
-// generateIntervalName returns a time-of-day prefixed name for the nth work interval (1-indexed).
-func generateIntervalName(n int, now time.Time) string {
+// currentBreakDuration returns the long break duration if the just-completed
+// pomodoro is a multiple of pomodorosPerCycle, otherwise the short break.
+func (m Model) currentBreakDuration() time.Duration {
+	completed := m.pomodorosCompleted + 1
+	if m.pomodorosPerCycle > 0 && completed%m.pomodorosPerCycle == 0 {
+		return m.longBreakDuration
+	}
+	return m.shortBreakDuration
+}
+
+// generatePomodoroName returns a time-of-day prefixed name for the nth pomodoro (1-indexed).
+func generatePomodoroName(n int, now time.Time) string {
 	hour := now.Hour()
 	var prefix string
 	switch {
@@ -32,14 +39,14 @@ func generateIntervalName(n int, now time.Time) string {
 	return fmt.Sprintf("%s #%d", prefix, n)
 }
 
-// resetInterval restarts the current work interval from scratch,
-// discarding all elapsed time and tasks created during this interval.
-func (m Model) resetInterval() Model {
-	m.remaining = m.workDuration
-	// Remove tasks that were started during this interval
+// resetPomodoro restarts the current pomodoro from scratch,
+// discarding all elapsed time and tasks created during this pomodoro.
+func (m Model) resetPomodoro() Model {
+	m.remaining = m.pomodoroDuration
+	// Remove tasks that were started during this pomodoro
 	kept := m.tasks[:0:0]
 	for _, t := range m.tasks {
-		if t.StartedAt.Before(m.intervalStartedAt) {
+		if t.StartedAt.Before(m.pomodoroStartedAt) {
 			kept = append(kept, t)
 		}
 	}
@@ -55,11 +62,11 @@ func (m Model) resetInterval() Model {
 	return m
 }
 
-// transitionToRest transitions from work to rest phase.
-func (m Model) transitionToRest(elapsed time.Duration, now time.Time) Model {
+// transitionToBreak transitions from a pomodoro to a break (short or long).
+func (m Model) transitionToBreak(elapsed time.Duration, now time.Time) Model {
 	m.totalWorked += elapsed
 	m.isRest = true
-	m.remaining = m.restDuration
+	m.remaining = m.currentBreakDuration()
 	m.waitingForWorkStart = false
 	m.restFinishedAt = time.Time{}
 	m.endActiveTask(now)
@@ -68,34 +75,18 @@ func (m Model) transitionToRest(elapsed time.Duration, now time.Time) Model {
 	return m
 }
 
-// transitionToLunch transitions from work to a lunch break.
-func (m Model) transitionToLunch(elapsed time.Duration, now time.Time) Model {
-	m.totalWorked += elapsed
-	m.isRest = true
-	m.isLunch = true
-	m.remaining = m.lunchDuration
-	m.waitingForWorkStart = false
-	m.restFinishedAt = time.Time{}
-	m.endActiveTask(now)
-	m.categoryMode = false
-	m.pendingTask = ""
-	return m
-}
-
-// transitionToWork transitions from rest (or lunch) to work phase.
-func (m Model) transitionToWork(elapsed time.Duration, now time.Time) Model {
+// transitionToPomodoro transitions from a break to a fresh pomodoro.
+func (m Model) transitionToPomodoro(elapsed time.Duration, now time.Time) Model {
 	m.totalRested += elapsed
-	m.intervalsCompleted++
+	m.pomodorosCompleted++
 	m.isRest = false
-	m.isLunch = false
-	m.lunchReady = false
 	m.waitingForWorkStart = false
 	m.restFinishedAt = time.Time{}
-	m.remaining = m.workDuration
-	// Generate a fresh interval name — no carry-over
-	m.currentIntervalName = generateIntervalName(m.intervalsCompleted+1, now)
-	m.intervalStartedAt = now
-	// Continue the last task (if any) into this new interval, carrying its category
+	m.remaining = m.pomodoroDuration
+	// Generate a fresh pomodoro name — no carry-over
+	m.currentPomodoroName = generatePomodoroName(m.pomodorosCompleted+1, now)
+	m.pomodoroStartedAt = now
+	// Continue the last task (if any) into this new pomodoro, carrying its category
 	if len(m.tasks) > 0 {
 		last := m.tasks[len(m.tasks)-1]
 		m.tasks = append(m.tasks, Task{Name: last.Name, Category: last.Category, StartedAt: now})

@@ -134,12 +134,15 @@ func minuteMarkers(elapsed, total time.Duration, barWidth int) string {
 	return dimSt.Render(string(buf[:end]))
 }
 
-// pomodoroDots renders the 4-dot cycle indicator and its label.
+// pomodoroDots renders the cycle indicator and its label.
 func pomodoroDots(m Model) string {
-	const setSize = 4
-	currentPos := m.intervalsCompleted % setSize
+	setSize := m.pomodorosPerCycle
+	if setSize < 1 {
+		setSize = 1
+	}
+	currentPos := m.pomodorosCompleted % setSize
 
-	// During rest, the just-completed interval counts as done.
+	// During rest, the just-completed pomodoro counts as done.
 	doneCount := currentPos
 	if m.isRest {
 		doneCount = currentPos + 1
@@ -172,17 +175,16 @@ func pomodoroDots(m Model) string {
 type kbBinding struct{ key, desc string }
 
 func keybindingGrid(m Model) [][2]kbBinding {
-	if m.isRest || m.isLunch {
+	if m.isRest {
 		return [][2]kbBinding{
-			{{"space", "pause / resume"}, {"s", "skip interval"}},
+			{{"space", "pause / resume"}, {"s", "skip break"}},
 			{{"q", "quit"}, {"", ""}},
 		}
 	}
 	return [][2]kbBinding{
-		{{"space", "pause / resume"}, {"n", "rename session"}},
-		{{"s", "skip interval"}, {"l", "lunch break"}},
-		{{"a", "add task"}, {"r", "reset"}},
-		{{"q", "quit"}, {"", ""}},
+		{{"space", "pause / resume"}, {"n", "rename pomodoro"}},
+		{{"a", "add task"}, {"s", "skip pomodoro"}},
+		{{"r", "reset"}, {"q", "quit"}},
 	}
 }
 
@@ -223,8 +225,8 @@ func renderStatusBar(m Model) string {
 	}
 
 	totalWorked := m.totalWorked
-	if !m.isRest && !m.isLunch && m.remaining > 0 {
-		if elapsed := m.workDuration - m.remaining; elapsed > 0 {
+	if !m.isRest && m.remaining > 0 {
+		if elapsed := m.pomodoroDuration - m.remaining; elapsed > 0 {
 			totalWorked += elapsed
 		}
 	}

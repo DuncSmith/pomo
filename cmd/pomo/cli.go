@@ -51,24 +51,46 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		return &parseArgsResult{action: "report", reportArgs: rArgs}, nil
 	}
 
-	var workDuration time.Duration
-	var intervalDuration time.Duration
-	var hasWork, hasInterval bool
+	var pomodoroDuration, shortBreakDuration, longBreakDuration time.Duration
+	var pomodorosPerCycle int
+	var hasPomodoro, hasShortBreak, hasLongBreak, hasPerCycle bool
 	var createSessionSummary *bool
 	autoStartWork := cfg.AutoStartWork
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--interval", "-i":
+		case "--short-break", "-s":
 			if i+1 >= len(args) {
-				return nil, fmt.Errorf("--interval requires a value")
+				return nil, fmt.Errorf("--short-break requires a value")
 			}
 			d, err := parseDuration(args[i+1])
 			if err != nil {
-				return nil, fmt.Errorf("invalid interval duration: %s", args[i+1])
+				return nil, fmt.Errorf("invalid short-break duration: %s", args[i+1])
 			}
-			intervalDuration = d
-			hasInterval = true
+			shortBreakDuration = d
+			hasShortBreak = true
+			i++
+		case "--long-break", "-L":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--long-break requires a value")
+			}
+			d, err := parseDuration(args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid long-break duration: %s", args[i+1])
+			}
+			longBreakDuration = d
+			hasLongBreak = true
+			i++
+		case "--per-cycle", "-c":
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("--per-cycle requires a value")
+			}
+			n, err := strconv.Atoi(args[i+1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid --per-cycle value: %s", args[i+1])
+			}
+			pomodorosPerCycle = n
+			hasPerCycle = true
 			i++
 		case "--create-session-summary":
 			t := true
@@ -79,80 +101,87 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 		case "--auto-start-work":
 			autoStartWork = true
 		default:
-			if hasWork {
+			if hasPomodoro {
 				return nil, fmt.Errorf("unexpected argument: %s", args[i])
 			}
 			d, err := parseDuration(args[i])
 			if err != nil {
 				return nil, fmt.Errorf("invalid duration: %s", args[i])
 			}
-			workDuration = d
-			hasWork = true
+			pomodoroDuration = d
+			hasPomodoro = true
 		}
 	}
 
-	if !hasWork {
-		workDuration = time.Duration(cfg.WorkTime) * time.Minute
+	if !hasPomodoro {
+		pomodoroDuration = time.Duration(cfg.PomodoroTime) * time.Minute
 	}
-	if !hasInterval {
-		intervalDuration = time.Duration(cfg.IntervalTime) * time.Minute
+	if !hasShortBreak {
+		shortBreakDuration = time.Duration(cfg.ShortBreakTime) * time.Minute
 	}
-
-	if workDuration <= 0 {
-		return nil, fmt.Errorf("work duration must be greater than 0")
+	if !hasLongBreak {
+		longBreakDuration = time.Duration(cfg.LongBreakTime) * time.Minute
 	}
-	if intervalDuration <= 0 {
-		return nil, fmt.Errorf("interval duration must be greater than 0")
-	}
-	if workDuration >= intervalDuration {
-		return nil, fmt.Errorf("work duration (%v) must be less than interval duration (%v)", workDuration, intervalDuration)
+	if !hasPerCycle {
+		pomodorosPerCycle = cfg.PomodorosPerCycle
 	}
 
-	restDuration := intervalDuration - workDuration
-	lunchDuration := time.Duration(cfg.LunchTime) * time.Minute
+	if pomodoroDuration <= 0 {
+		return nil, fmt.Errorf("pomodoro duration must be greater than 0")
+	}
+	if shortBreakDuration <= 0 {
+		return nil, fmt.Errorf("short-break duration must be greater than 0")
+	}
+	if longBreakDuration <= 0 {
+		return nil, fmt.Errorf("long-break duration must be greater than 0")
+	}
+	if pomodorosPerCycle < 1 {
+		return nil, fmt.Errorf("--per-cycle must be at least 1")
+	}
 
 	p := progress.New(progress.WithDefaultBlend())
 	now := time.Now()
 	model := &Model{
-		workDuration:        workDuration,
-		restDuration:        restDuration,
-		intervalDuration:    intervalDuration,
-		lunchDuration:       lunchDuration,
-		remaining:           workDuration,
+		pomodoroDuration:    pomodoroDuration,
+		shortBreakDuration:  shortBreakDuration,
+		longBreakDuration:   longBreakDuration,
+		pomodorosPerCycle:   pomodorosPerCycle,
+		remaining:           pomodoroDuration,
 		isRest:              false,
 		progress:            &p,
-		currentIntervalName: generateIntervalName(1, now),
+		currentPomodoroName: generatePomodoroName(1, now),
 		tasks:               []Task{},
 		namingMode:          false,
 		nameInput:           "",
 		taskMode:            false,
 		taskInput:           "",
 		startedAt:           now,
-		intervalStartedAt:   now,
+		pomodoroStartedAt:   now,
 		autoStartWork:       autoStartWork,
 	}
 	return &parseArgsResult{model: model, createSessionSummary: createSessionSummary}, nil
 }
 
 func showHelp() {
-	fmt.Println("Usage: pomo [work] [--interval duration] [--auto-start-work]")
+	fmt.Println("Usage: pomo [pomodoro] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work]")
 	fmt.Println("       pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 	fmt.Println()
-	fmt.Println("Runs repeating work/rest intervals until you quit.")
-	fmt.Println("Rest time is always interval − work and cannot be set directly.")
+	fmt.Println("Runs the classic Pomodoro technique: a pomodoro followed by a short break,")
+	fmt.Println("with a longer break after every N pomodoros, until you quit.")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  pomo               # 50m work (10m rest)")
-	fmt.Println("  pomo 25            # 25m work (35m rest)")
-	fmt.Println("  pomo 25m           # 25m work (35m rest)")
-	fmt.Println("  pomo 30s           # 30s work (59m30s rest)")
-	fmt.Println("  pomo 45 -i 90      # 45m work, 90m interval (45m rest)")
-	fmt.Println("  pomo report        # weekly category summary (current week)")
-	fmt.Println("  pomo report --last # previous week")
+	fmt.Println("  pomo                   # 25m pomodoro / 5m short / 10m long / 4 per cycle")
+	fmt.Println("  pomo 50                # 50m pomodoro")
+	fmt.Println("  pomo 50 -s 10 -L 20    # 50m pomodoro, 10m short break, 20m long break")
+	fmt.Println("  pomo -c 3              # long break every 3rd pomodoro")
+	fmt.Println("  pomo report            # weekly category summary (current week)")
+	fmt.Println("  pomo report --last     # previous week")
 	fmt.Println()
 	fmt.Println("Timer options:")
-	fmt.Println("  -i, --interval              Set total interval duration; rest = interval − work (default: 60m)")
-	fmt.Println("      --auto-start-work           Automatically start work when rest ends (default: false)")
+	fmt.Println("  -s, --short-break           Short break duration (default: 5m)")
+	fmt.Println("  -L, --long-break            Long break duration (default: 10m)")
+	fmt.Println("  -c, --per-cycle             Number of pomodoros between long breaks (default: 4)")
+	fmt.Println("      --auto-start-work           Automatically start the next pomodoro when a break ends (default: false)")
 	fmt.Println("      --create-session-summary    Write a Markdown summary on quit (default: true)")
 	fmt.Println("      --no-create-session-summary Disable writing the Markdown summary")
 	fmt.Println()
@@ -165,7 +194,7 @@ func showHelp() {
 	fmt.Println("  -v, --version               Show version information")
 	fmt.Println("  -h, --help                  Show this help")
 	fmt.Println()
-	fmt.Println("Default: 50m work (10m rest, 60m interval)")
+	fmt.Println("Default: 25m pomodoro / 5m short break / 10m long break / 4 per cycle")
 }
 
 func parseReportArgs(args []string) (*reportArgs, error) {

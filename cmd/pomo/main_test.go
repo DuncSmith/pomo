@@ -64,8 +64,8 @@ func TestFormatTime(t *testing.T) {
 
 func TestPhaseDuration(t *testing.T) {
 	m := Model{
-		workDuration: 50 * time.Minute,
-		restDuration: 10 * time.Minute,
+		pomodoroDuration: 50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 	}
 
 	if m.phaseDuration() != 50*time.Minute {
@@ -80,12 +80,13 @@ func TestPhaseDuration(t *testing.T) {
 
 func TestPhaseTransitionWorkToRest(t *testing.T) {
 	m := Model{
-		workDuration:     50 * time.Minute,
-		restDuration:     10 * time.Minute,
-		intervalDuration: 60 * time.Minute,
-		remaining:        0,
-		isRest:           false,
-		tasks:            []Task{},
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
+		longBreakDuration:  20 * time.Minute,
+		pomodorosPerCycle:  4,
+		remaining:          0,
+		isRest:             false,
+		tasks:              []Task{},
 	}
 
 	result, cmd := m.Update(finishedMsg{})
@@ -97,8 +98,8 @@ func TestPhaseTransitionWorkToRest(t *testing.T) {
 	if model.remaining != 10*time.Minute {
 		t.Errorf("Expected remaining to be 10m, got %v", model.remaining)
 	}
-	if model.intervalsCompleted != 0 {
-		t.Errorf("Expected 0 completed intervals, got %d", model.intervalsCompleted)
+	if model.pomodorosCompleted != 0 {
+		t.Errorf("Expected 0 completed pomodoros, got %d", model.pomodorosCompleted)
 	}
 	if model.totalWorked != 50*time.Minute {
 		t.Errorf("Expected 50m total worked, got %v", model.totalWorked)
@@ -110,13 +111,14 @@ func TestPhaseTransitionWorkToRest(t *testing.T) {
 
 func TestPhaseTransitionRestToWork(t *testing.T) {
 	m := Model{
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalDuration:   60 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
+		longBreakDuration:  20 * time.Minute,
+		pomodorosPerCycle:  4,
 		remaining:          0,
 		isRest:             true,
 		autoStartWork:      true,
-		intervalsCompleted: 0,
+		pomodorosCompleted: 0,
 		totalWorked:        50 * time.Minute,
 		tasks:              []Task{},
 	}
@@ -130,8 +132,8 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 	if model.remaining != 50*time.Minute {
 		t.Errorf("Expected remaining to be 50m, got %v", model.remaining)
 	}
-	if model.intervalsCompleted != 1 {
-		t.Errorf("Expected 1 completed interval, got %d", model.intervalsCompleted)
+	if model.pomodorosCompleted != 1 {
+		t.Errorf("Expected 1 completed pomodoro, got %d", model.pomodorosCompleted)
 	}
 	if model.totalRested != 10*time.Minute {
 		t.Errorf("Expected 10m total rested, got %v", model.totalRested)
@@ -143,12 +145,13 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 
 func TestPhaseTransitionRestWaitsForConfirmationByDefault(t *testing.T) {
 	m := Model{
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalDuration:   60 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
+		longBreakDuration:  20 * time.Minute,
+		pomodorosPerCycle:  4,
 		remaining:          0,
 		isRest:             true,
-		intervalsCompleted: 0,
+		pomodorosCompleted: 0,
 		totalWorked:        50 * time.Minute,
 		tasks:              []Task{},
 	}
@@ -179,8 +182,8 @@ func TestPhaseTransitionRestWaitsForConfirmationByDefault(t *testing.T) {
 	if model.waitingForWorkStart {
 		t.Error("Expected waitingForWorkStart to be false after keypress")
 	}
-	if model.intervalsCompleted != 1 {
-		t.Errorf("Expected 1 completed interval, got %d", model.intervalsCompleted)
+	if model.pomodorosCompleted != 1 {
+		t.Errorf("Expected 1 completed pomodoro, got %d", model.pomodorosCompleted)
 	}
 	if model.totalRested < 10*time.Minute+3*time.Second {
 		t.Errorf("Expected totalRested to include wait time, got %v", model.totalRested)
@@ -192,12 +195,13 @@ func TestPhaseTransitionRestWaitsForConfirmationByDefault(t *testing.T) {
 
 func TestQuitTracksPartialProgress(t *testing.T) {
 	m := Model{
-		workDuration:     50 * time.Minute,
-		restDuration:     10 * time.Minute,
-		intervalDuration: 60 * time.Minute,
-		remaining:        30 * time.Minute,
-		isRest:           false,
-		tasks:            []Task{},
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
+		longBreakDuration:  20 * time.Minute,
+		pomodorosPerCycle:  4,
+		remaining:          30 * time.Minute,
+		isRest:             false,
+		tasks:              []Task{},
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
@@ -223,7 +227,7 @@ func TestViewShowsReadyToWorkPrompt(t *testing.T) {
 	}
 }
 
-func TestGenerateIntervalName(t *testing.T) {
+func TestGeneratePomodoroName(t *testing.T) {
 	tests := []struct {
 		name     string
 		n        int
@@ -246,9 +250,9 @@ func TestGenerateIntervalName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			now := time.Date(2026, 1, 1, tt.hour, 0, 0, 0, time.UTC)
-			result := generateIntervalName(tt.n, now)
+			result := generatePomodoroName(tt.n, now)
 			if result != tt.expected {
-				t.Errorf("generateIntervalName(%d, hour=%d): expected %q, got %q", tt.n, tt.hour, tt.expected, result)
+				t.Errorf("generatePomodoroName(%d, hour=%d): expected %q, got %q", tt.n, tt.hour, tt.expected, result)
 			}
 		})
 	}
@@ -324,16 +328,16 @@ func TestActiveTask(t *testing.T) {
 	}
 }
 
-func TestTransitionToRestEndsActiveTask(t *testing.T) {
+func TestTransitionToBreakEndsActiveTask(t *testing.T) {
 	start := time.Now()
 	m := Model{
-		workDuration: 50 * time.Minute,
-		restDuration: 10 * time.Minute,
+		pomodoroDuration: 50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		tasks:        []Task{},
 	}
 	m.startTask("Active task", start)
 
-	m = m.transitionToRest(50*time.Minute, time.Now())
+	m = m.transitionToBreak(50*time.Minute, time.Now())
 
 	if m.activeTask() != nil {
 		t.Error("Expected no active task after transitioning to rest")
@@ -343,12 +347,12 @@ func TestTransitionToRestEndsActiveTask(t *testing.T) {
 	}
 }
 
-func TestTransitionToWorkContinuesLastTask(t *testing.T) {
+func TestTransitionToPomodoroContinuesLastTask(t *testing.T) {
 	start := time.Now()
 	m := Model{
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalsCompleted: 0,
+		pomodoroDuration:       50 * time.Minute,
+		shortBreakDuration:       10 * time.Minute,
+		pomodorosCompleted: 0,
 		isRest:             true,
 		tasks:              []Task{},
 	}
@@ -359,7 +363,7 @@ func TestTransitionToWorkContinuesLastTask(t *testing.T) {
 		EndedAt:   start.Add(50 * time.Minute),
 	})
 
-	m = m.transitionToWork(10*time.Minute, time.Now())
+	m = m.transitionToPomodoro(10*time.Minute, time.Now())
 
 	// Should have created a new task entry continuing the last task name
 	if len(m.tasks) != 2 {
@@ -373,16 +377,16 @@ func TestTransitionToWorkContinuesLastTask(t *testing.T) {
 	}
 }
 
-func TestTransitionToWorkNoTasksNoContinuation(t *testing.T) {
+func TestTransitionToPomodoroNoTasksNoContinuation(t *testing.T) {
 	m := Model{
-		workDuration:       50 * time.Minute,
-		restDuration:       10 * time.Minute,
-		intervalsCompleted: 0,
+		pomodoroDuration:       50 * time.Minute,
+		shortBreakDuration:       10 * time.Minute,
+		pomodorosCompleted: 0,
 		isRest:             true,
 		tasks:              []Task{},
 	}
 
-	m = m.transitionToWork(10*time.Minute, time.Now())
+	m = m.transitionToPomodoro(10*time.Minute, time.Now())
 
 	// No tasks to continue
 	if len(m.tasks) != 0 {
@@ -390,31 +394,89 @@ func TestTransitionToWorkNoTasksNoContinuation(t *testing.T) {
 	}
 }
 
-func TestTransitionToWorkGeneratesNewIntervalName(t *testing.T) {
+func TestTransitionToBreakUsesLongBreakAfterPerCycle(t *testing.T) {
+	cases := []struct {
+		name             string
+		completedBefore  int
+		expectedDuration time.Duration
+	}{
+		{name: "1st pomodoro -> short", completedBefore: 0, expectedDuration: 5 * time.Minute},
+		{name: "2nd pomodoro -> short", completedBefore: 1, expectedDuration: 5 * time.Minute},
+		{name: "3rd pomodoro -> short", completedBefore: 2, expectedDuration: 5 * time.Minute},
+		{name: "4th pomodoro -> long", completedBefore: 3, expectedDuration: 15 * time.Minute},
+		{name: "5th pomodoro -> short", completedBefore: 4, expectedDuration: 5 * time.Minute},
+		{name: "8th pomodoro -> long", completedBefore: 7, expectedDuration: 15 * time.Minute},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Model{
+				pomodoroDuration:   25 * time.Minute,
+				shortBreakDuration: 5 * time.Minute,
+				longBreakDuration:  15 * time.Minute,
+				pomodorosPerCycle:  4,
+				pomodorosCompleted: tc.completedBefore,
+				tasks:              []Task{},
+			}
+			m = m.transitionToBreak(25*time.Minute, time.Now())
+			if !m.isRest {
+				t.Fatal("Expected isRest to be true after transitionToBreak")
+			}
+			if m.remaining != tc.expectedDuration {
+				t.Errorf("Expected remaining %v, got %v", tc.expectedDuration, m.remaining)
+			}
+		})
+	}
+}
+
+func TestPhaseDurationLongBreak(t *testing.T) {
 	m := Model{
-		workDuration:        50 * time.Minute,
-		restDuration:        10 * time.Minute,
-		intervalsCompleted:  0,
+		pomodoroDuration:   25 * time.Minute,
+		shortBreakDuration: 5 * time.Minute,
+		longBreakDuration:  15 * time.Minute,
+		pomodorosPerCycle:  4,
+		pomodorosCompleted: 3, // 4th pomodoro just completed
+		isRest:             true,
+	}
+	if m.phaseDuration() != 15*time.Minute {
+		t.Errorf("Expected phaseDuration to be 15m (long break), got %v", m.phaseDuration())
+	}
+
+	m.pomodorosCompleted = 0 // 1st pomodoro just completed
+	if m.phaseDuration() != 5*time.Minute {
+		t.Errorf("Expected phaseDuration to be 5m (short break), got %v", m.phaseDuration())
+	}
+
+	m.isRest = false
+	if m.phaseDuration() != 25*time.Minute {
+		t.Errorf("Expected phaseDuration to be 25m (pomodoro), got %v", m.phaseDuration())
+	}
+}
+
+func TestTransitionToPomodoroGeneratesNewName(t *testing.T) {
+	m := Model{
+		pomodoroDuration:        50 * time.Minute,
+		shortBreakDuration:        10 * time.Minute,
+		pomodorosCompleted:  0,
 		isRest:              true,
-		currentIntervalName: "My Custom Name",
+		currentPomodoroName: "My Custom Name",
 		tasks:               []Task{},
 	}
 
-	m = m.transitionToWork(10*time.Minute, time.Now())
+	m = m.transitionToPomodoro(10*time.Minute, time.Now())
 
 	// Name should be auto-generated, not the old custom name
-	if m.currentIntervalName == "My Custom Name" {
-		t.Error("Expected interval name to be reset on new work phase, not carry over the custom name")
+	if m.currentPomodoroName == "My Custom Name" {
+		t.Error("Expected pomodoro name to be reset on new work phase, not carry over the custom name")
 	}
-	if m.currentIntervalName == "" {
-		t.Error("Expected interval name to be set to an auto-generated value")
+	if m.currentPomodoroName == "" {
+		t.Error("Expected pomodoro name to be set to an auto-generated value")
 	}
 }
 
 func TestTaskKeyOpensTaskMode(t *testing.T) {
 	m := Model{
-		workDuration: 50 * time.Minute,
-		restDuration: 10 * time.Minute,
+		pomodoroDuration: 50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		remaining:    40 * time.Minute,
 		isRest:       false,
 		tasks:        []Task{},
@@ -430,8 +492,8 @@ func TestTaskKeyOpensTaskMode(t *testing.T) {
 
 func TestTaskKeyDisabledDuringRest(t *testing.T) {
 	m := Model{
-		workDuration: 50 * time.Minute,
-		restDuration: 10 * time.Minute,
+		pomodoroDuration: 50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		remaining:    8 * time.Minute,
 		isRest:       true,
 		tasks:        []Task{},
@@ -654,8 +716,8 @@ func TestTaskPickerDigitAfterTypingIsText(t *testing.T) {
 func TestTaskKeyPopulatesRecentTasks(t *testing.T) {
 	now := time.Now()
 	m := Model{
-		workDuration: 50 * time.Minute,
-		restDuration: 10 * time.Minute,
+		pomodoroDuration: 50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		remaining:    40 * time.Minute,
 		isRest:       false,
 		tasks: []Task{
@@ -676,12 +738,13 @@ func TestTaskKeyPopulatesRecentTasks(t *testing.T) {
 
 func TestSkipWorkTracksPartialTime(t *testing.T) {
 	m := Model{
-		workDuration:     50 * time.Minute,
-		restDuration:     10 * time.Minute,
-		intervalDuration: 60 * time.Minute,
-		remaining:        30 * time.Minute, // 20 minutes into work
-		isRest:           false,
-		tasks:            []Task{},
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
+		longBreakDuration:  20 * time.Minute,
+		pomodorosPerCycle:  4,
+		remaining:          30 * time.Minute, // 20 minutes into work
+		isRest:             false,
+		tasks:              []Task{},
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
@@ -697,12 +760,13 @@ func TestSkipWorkTracksPartialTime(t *testing.T) {
 
 func TestSkipRestTracksPartialTime(t *testing.T) {
 	m := Model{
-		workDuration:     50 * time.Minute,
-		restDuration:     10 * time.Minute,
-		intervalDuration: 60 * time.Minute,
-		remaining:        7 * time.Minute, // 3 minutes into rest
-		isRest:           true,
-		tasks:            []Task{},
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
+		longBreakDuration:  20 * time.Minute,
+		pomodorosPerCycle:  4,
+		remaining:          7 * time.Minute, // 3 minutes into rest
+		isRest:             true,
+		tasks:              []Task{},
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
@@ -808,16 +872,16 @@ func TestTaskPickerResumeUncategorisedTaskEntersCategoryMode(t *testing.T) {
 	}
 }
 
-func TestResetIntervalResetsTimer(t *testing.T) {
+func TestResetPomodoroResetsTimer(t *testing.T) {
 	now := time.Now()
 	m := Model{
-		workDuration:      50 * time.Minute,
-		restDuration:      10 * time.Minute,
+		pomodoroDuration:      50 * time.Minute,
+		shortBreakDuration:      10 * time.Minute,
 		remaining:         30 * time.Minute, // 20 mins elapsed
 		isRest:            false,
 		totalWorked:       0,
 		tasks:             []Task{},
-		intervalStartedAt: now.Add(-20 * time.Minute),
+		pomodoroStartedAt: now.Add(-20 * time.Minute),
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
@@ -831,7 +895,7 @@ func TestResetIntervalResetsTimer(t *testing.T) {
 	}
 }
 
-func TestResetIntervalRemovesCurrentIntervalTasks(t *testing.T) {
+func TestResetPomodoroRemovesCurrentPomodoroTasks(t *testing.T) {
 	intervalStart := time.Now()
 	oldTask := Task{
 		Name:      "old task",
@@ -844,12 +908,12 @@ func TestResetIntervalRemovesCurrentIntervalTasks(t *testing.T) {
 	}
 
 	m := Model{
-		workDuration:      50 * time.Minute,
-		restDuration:      10 * time.Minute,
+		pomodoroDuration:      50 * time.Minute,
+		shortBreakDuration:      10 * time.Minute,
 		remaining:         30 * time.Minute,
 		isRest:            false,
 		tasks:             []Task{oldTask, currentTask},
-		intervalStartedAt: intervalStart,
+		pomodoroStartedAt: intervalStart,
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
@@ -863,10 +927,10 @@ func TestResetIntervalRemovesCurrentIntervalTasks(t *testing.T) {
 	}
 }
 
-func TestResetIntervalIgnoredDuringRest(t *testing.T) {
+func TestResetPomodoroIgnoredDuringRest(t *testing.T) {
 	m := Model{
-		workDuration: 50 * time.Minute,
-		restDuration: 10 * time.Minute,
+		pomodoroDuration: 50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		remaining:    5 * time.Minute,
 		isRest:       true,
 		tasks:        []Task{},
@@ -880,37 +944,18 @@ func TestResetIntervalIgnoredDuringRest(t *testing.T) {
 	}
 }
 
-func TestResetIntervalIgnoredDuringLunch(t *testing.T) {
-	m := Model{
-		workDuration:  50 * time.Minute,
-		restDuration:  10 * time.Minute,
-		lunchDuration: 30 * time.Minute,
-		remaining:     15 * time.Minute,
-		isRest:        true,
-		isLunch:       true,
-		tasks:         []Task{},
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
-	model := result.(Model)
-
-	if model.remaining != 15*time.Minute {
-		t.Errorf("Expected remaining unchanged at 15m during lunch, got %v", model.remaining)
-	}
-}
-
-func TestResetIntervalClearsInputModes(t *testing.T) {
+func TestResetPomodoroClearsInputModes(t *testing.T) {
 	now := time.Now()
 	m := Model{
-		workDuration:      50 * time.Minute,
-		restDuration:      10 * time.Minute,
+		pomodoroDuration:      50 * time.Minute,
+		shortBreakDuration:      10 * time.Minute,
 		remaining:         30 * time.Minute,
 		isRest:            false,
 		tasks:             []Task{},
-		intervalStartedAt: now,
+		pomodoroStartedAt: now,
 	}
 
-	// Test that resetInterval clears all modes directly
+	// Test that resetPomodoro clears all modes directly
 	m.namingMode = true
 	m.nameInput = "test"
 	m.taskMode = true
@@ -919,7 +964,7 @@ func TestResetIntervalClearsInputModes(t *testing.T) {
 	m.pendingTask = "test"
 	m.recentTasks = []string{"a", "b"}
 
-	result := m.resetInterval()
+	result := m.resetPomodoro()
 
 	if result.namingMode {
 		t.Error("Expected namingMode to be cleared")
@@ -944,16 +989,16 @@ func TestResetIntervalClearsInputModes(t *testing.T) {
 	}
 }
 
-func TestResetIntervalPreservesTotalWorkedFromPriorIntervals(t *testing.T) {
+func TestResetPomodoroPreservesTotalWorkedFromPriorPomodoros(t *testing.T) {
 	now := time.Now()
 	m := Model{
-		workDuration:      50 * time.Minute,
-		restDuration:      10 * time.Minute,
+		pomodoroDuration:      50 * time.Minute,
+		shortBreakDuration:      10 * time.Minute,
 		remaining:         30 * time.Minute,
 		isRest:            false,
 		totalWorked:       50 * time.Minute, // from a prior completed interval
 		tasks:             []Task{},
-		intervalStartedAt: now.Add(-20 * time.Minute),
+		pomodoroStartedAt: now.Add(-20 * time.Minute),
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
