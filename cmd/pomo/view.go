@@ -45,12 +45,17 @@ var (
 			BorderForeground(colDim).
 			Foreground(colAccent).
 			Padding(0, 1)
-	dotDoneSt = lipgloss.NewStyle().Foreground(colOrange)
-	dotNowSt  = lipgloss.NewStyle().Foreground(colAccent)
-	dotNextSt = lipgloss.NewStyle().Foreground(colDim)
-	runSt     = lipgloss.NewStyle().Foreground(colGreen)
-	pauseSt   = lipgloss.NewStyle().Foreground(colYellow)
-	taskDimSt = lipgloss.NewStyle().Foreground(colDim).Italic(true)
+	dotDoneSt  = lipgloss.NewStyle().Foreground(colOrange)
+	dotNowSt   = lipgloss.NewStyle().Foreground(colAccent)
+	dotNextSt  = lipgloss.NewStyle().Foreground(colDim)
+	runSt      = lipgloss.NewStyle().Foreground(colGreen)
+	pauseSt    = lipgloss.NewStyle().Foreground(colYellow)
+	taskDimSt  = lipgloss.NewStyle().Foreground(colDim).Italic(true)
+	taskBoxSt  = lipgloss.NewStyle().
+			MarginLeft(2).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colDim).
+			Padding(0, 1)
 )
 
 // bigClockRows renders a "MM:SS" string as 3-row ASCII art.

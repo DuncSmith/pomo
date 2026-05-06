@@ -316,25 +316,36 @@ func (m Model) View() tea.View {
 	s.WriteString("  " + m.progress.ViewAs(progressPct) + "\n")
 	s.WriteString("  " + minuteMarkers(elapsed, phaseDur, barWidth) + "\n")
 
-	// ── 5. TASK ROW ───────────────────────────────────────────────────
+	// ── 5. TASK BOX ───────────────────────────────────────────────────
 	s.WriteByte('\n')
 	if !m.isRest {
+		// Width() in lipgloss v2 = outer rendered width (borders + padding + content).
+		// wrapAt = Width - horizontalBorder(2) - hPad(2) = Width - 4.
+		// Target outer = width-4, so Width = width-4 and wrapAt = width-8.
+		// Use NBSP in taskHint so the word wrapper treats it as one unbreakable token.
+		styleW := width - 4
+		textAreaW := styleW - 4 // wrapAt: Width - border(2) - padding(2)
+		if textAreaW < 10 {
+			textAreaW = 10
+			styleW = textAreaW + 4
+		}
 		var taskLeft string
 		if t := m.activeTask(); t != nil {
 			if t.Category != "" {
-				taskLeft = "  › " + t.Name + "  " + dimSt.Render("["+t.Category+"]")
+				taskLeft = "› " + t.Name + "  " + dimSt.Render("["+t.Category+"]")
 			} else {
-				taskLeft = "  › " + t.Name
+				taskLeft = "› " + t.Name
 			}
 		} else {
-			taskLeft = "  " + taskDimSt.Render("› no task set")
+			taskLeft = taskDimSt.Render("› no task set")
 		}
-		taskHint := dimSt.Render("[a] add task")
-		gap := width - lipgloss.Width(taskLeft) - lipgloss.Width(taskHint) - 2
+		taskHint := dimSt.Render("[a] add task")
+		gap := textAreaW - lipgloss.Width(taskLeft) - lipgloss.Width(taskHint)
 		if gap < 1 {
 			gap = 1
 		}
-		s.WriteString(taskLeft + strings.Repeat(" ", gap) + taskHint + "\n")
+		inner := taskLeft + strings.Repeat(" ", gap) + taskHint
+		s.WriteString(taskBoxSt.Width(styleW).Render(inner) + "\n")
 	}
 
 	// ── 6. POMODORO DOTS ──────────────────────────────────────────────
