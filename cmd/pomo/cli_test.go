@@ -194,7 +194,7 @@ func TestParseArgs(t *testing.T) {
 		},
 		{
 			name:              "all flags combined",
-			args:              []string{"-w", "50", "-s", "10", "-L", "20", "-c", "3"},
+			args:              []string{"-w", "50", "-s", "10", "-l", "20", "-c", "3"},
 			pomodoroDuration:  50 * time.Minute,
 			shortBreak:        10 * time.Minute,
 			longBreak:         20 * time.Minute,
@@ -294,7 +294,7 @@ func TestParseArgs(t *testing.T) {
 		},
 		{
 			name:        "zero long break",
-			args:        []string{"-L", "0"},
+			args:        []string{"-l", "0"},
 			expectError: true,
 		},
 		{
@@ -444,7 +444,7 @@ func TestParseArgsCLIOverridesConfig(t *testing.T) {
 			Create: true,
 		},
 	}
-	result, err := parseArgs([]string{"-w", "45", "-s", "8", "-L", "20", "-c", "5"}, cfg)
+	result, err := parseArgs([]string{"-w", "45", "-s", "8", "-l", "20", "-c", "5"}, cfg)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}

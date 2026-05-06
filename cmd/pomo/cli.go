@@ -73,7 +73,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 			shortBreakDuration = d
 			hasShortBreak = true
 			i++
-		case "--long-break", "-L":
+		case "--long-break", "-l":
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("--long-break requires a value")
 			}
@@ -179,7 +179,7 @@ func showHelp() {
 	fmt.Println("Examples:")
 	fmt.Println("  pomo                       # 25m pomodoro / 5m short / 10m long / 4 per cycle")
 	fmt.Println("  pomo -w 50                 # 50m pomodoro")
-	fmt.Println("  pomo -w 50 -s 10 -L 20    # 50m pomodoro, 10m short break, 20m long break")
+	fmt.Println("  pomo -w 50 -s 10 -l 20    # 50m pomodoro, 10m short break, 20m long break")
 	fmt.Println("  pomo -c 3                  # long break every 3rd pomodoro")
 	fmt.Println("  pomo report            # weekly category summary (current week)")
 	fmt.Println("  pomo report --last     # previous week")
@@ -187,7 +187,7 @@ func showHelp() {
 	fmt.Println("Timer options:")
 	fmt.Println("  -w, --work                  Work (pomodoro) duration (default: 25m)")
 	fmt.Println("  -s, --short-break           Short break duration (default: 5m)")
-	fmt.Println("  -L, --long-break            Long break duration (default: 10m)")
+	fmt.Println("  -l, --long-break            Long break duration (default: 10m)")
 	fmt.Println("  -c, --per-cycle             Number of pomodoros between long breaks (default: 4)")
 	fmt.Println("      --auto-start-work           Automatically start the next pomodoro when a break ends (default: false)")
 	fmt.Println("      --create-session-summary    Write a Markdown summary on quit (default: true)")
