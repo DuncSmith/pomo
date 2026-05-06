@@ -126,7 +126,7 @@ func configPath() (string, error) {
 	return filepath.Join(configHome, "pomo", "config.yaml"), nil
 }
 
-// loadConfig reads the config file, creating it with defaults if it doesn't exist.
+// loadConfig reads the config file. If no config file exists, built-in defaults are returned.
 func loadConfig() (Config, error) {
 	path, err := configPath()
 	if err != nil {
@@ -135,12 +135,7 @@ func loadConfig() (Config, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		cfg := defaultConfig()
-		cfg.Categories = processCategories(builtinCategories)
-		if writeErr := writeDefaultConfig(path, cfg); writeErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: could not create config file: %v\n", writeErr)
-		}
-		return cfg, nil
+		return defaultConfig(), nil
 	}
 	if err != nil {
 		return defaultConfig(), fmt.Errorf("could not read config file: %w", err)

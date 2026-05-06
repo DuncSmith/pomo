@@ -40,7 +40,7 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-func TestLoadConfigCreatesDefaultOnFirstRun(t *testing.T) {
+func TestLoadConfigReturnsDefaultsWhenNoFile(t *testing.T) {
 	// Point XDG_CONFIG_HOME at a temp dir so we don't touch the real config
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
@@ -50,7 +50,7 @@ func TestLoadConfigCreatesDefaultOnFirstRun(t *testing.T) {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	// Should return defaults
+	// Should return defaults without writing a file
 	def := defaultConfig()
 	if cfg.PomodoroTime != def.PomodoroTime {
 		t.Errorf("Expected PomodoroTime %d, got %d", def.PomodoroTime, cfg.PomodoroTime)
@@ -71,10 +71,10 @@ func TestLoadConfigCreatesDefaultOnFirstRun(t *testing.T) {
 		t.Errorf("Expected SessionSummary.Create %v, got %v", def.SessionSummary.Create, cfg.SessionSummary.Create)
 	}
 
-	// Config file should have been created on disk
+	// Config file should NOT have been written to disk
 	expectedPath := filepath.Join(dir, "pomo", "config.yaml")
-	if _, err := os.Stat(expectedPath); os.IsNotExist(err) {
-		t.Error("Expected config file to be created on first run, but it doesn't exist")
+	if _, err := os.Stat(expectedPath); err == nil {
+		t.Error("loadConfig should not write a config file when none exists")
 	}
 }
 

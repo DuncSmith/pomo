@@ -150,7 +150,7 @@ pomo report --from 2025-04-21            # from that date to today
 
 **Session data** is stored automatically in `~/.local/share/pomo/pomo.db` every time you quit `pomo`. A Markdown summary is also written to `~/pomos/` on each quit.
 
-**Configure the work week** in `~/.config/pomo/config.yaml`:
+**Configure the work week** in `~/.config/pomo/config.yaml` (see below for how to create it):
 
 ```yaml
 weekly_report:
@@ -195,7 +195,7 @@ When categories are configured, the task section is grouped by category, sorted 
 
 Without categories configured, the original flat task list is shown.
 
-**Configuration:** Add a `session_summary` block to your config file (`~/.config/pomo/config.yaml`):
+**Configuration:** Add a `session_summary` block to `~/.config/pomo/config.yaml` (run `pomo --init` to create the file with all defaults pre-filled):
 
 ```yaml
 pomodoro_time: 25
@@ -238,6 +238,18 @@ You can also toggle summaries from the command line:
 ./pomo --no-create-session-summary   # Disable the Markdown summary for this run
 ./pomo --create-session-summary      # Explicitly enable (usually the default)
 ```
+
+### Configuration
+
+`pomo` works out of the box with built-in defaults — no config file needed. To customise the defaults, create a config file with:
+
+```bash
+pomo --init
+```
+
+This writes `~/.config/pomo/config.yaml` with all options pre-filled. The command is safe to run multiple times — it won't overwrite an existing file.
+
+Edit the file to change any values; `pomo` picks them up on the next run.
 
 ### Help
 ```bash

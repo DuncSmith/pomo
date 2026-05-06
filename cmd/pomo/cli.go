@@ -41,6 +41,9 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 			info := fmt.Sprintf("pomo %s (commit: %s, built: %s)", version, commit, date)
 			return &parseArgsResult{action: "version", versionInfo: info}, nil
 		}
+		if arg == "--init" {
+			return &parseArgsResult{action: "init"}, nil
+		}
 	}
 
 	if len(args) > 0 && args[0] == "report" {
@@ -164,6 +167,7 @@ func parseArgs(args []string, cfg Config) (*parseArgsResult, error) {
 
 func showHelp() {
 	fmt.Println("Usage: pomo [pomodoro] [--short-break duration] [--long-break duration] [--per-cycle N] [--auto-start-work]")
+	fmt.Println("       pomo --init")
 	fmt.Println("       pomo report [--last] [--from YYYY-MM-DD] [--to YYYY-MM-DD]")
 	fmt.Println()
 	fmt.Println("Runs the classic Pomodoro technique: a pomodoro followed by a short break,")
@@ -191,6 +195,7 @@ func showHelp() {
 	fmt.Println("      --to DATE       End date (YYYY-MM-DD; defaults to today when omitted)")
 	fmt.Println()
 	fmt.Println("General options:")
+	fmt.Println("      --init                  Create default config at ~/.config/pomo/config.yaml")
 	fmt.Println("  -v, --version               Show version information")
 	fmt.Println("  -h, --help                  Show this help")
 	fmt.Println()

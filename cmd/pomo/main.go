@@ -30,6 +30,24 @@ func main() {
 	case "report":
 		runReport(cfg, *result.reportArgs)
 		return
+	case "init":
+		path, err := configPath()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error: could not resolve config path:", err)
+			os.Exit(1)
+		}
+		if _, err := os.Stat(path); err == nil {
+			fmt.Println("Config file already exists:", path)
+			return
+		}
+		initCfg := defaultConfig()
+		initCfg.Categories = processCategories(builtinCategories)
+		if err := writeDefaultConfig(path, initCfg); err != nil {
+			fmt.Fprintln(os.Stderr, "error: could not write config:", err)
+			os.Exit(1)
+		}
+		fmt.Println("Config written to", path)
+		return
 	}
 
 	// CLI flag overrides config file value
