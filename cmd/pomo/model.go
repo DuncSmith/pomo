@@ -231,9 +231,10 @@ func (m Model) View() tea.View {
 	}
 
 	// ── Layout constants ───────────────────────────────────────────────
+	const maxUIWidth = 100
 	width := m.width
-	if width == 0 {
-		width = 80
+	if width == 0 || width > maxUIWidth {
+		width = maxUIWidth
 	}
 
 	// ── Phase metadata ─────────────────────────────────────────────────
