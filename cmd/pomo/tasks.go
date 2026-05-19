@@ -34,17 +34,6 @@ func (m *Model) startTask(name string, at time.Time) {
 	m.tasks = append(m.tasks, Task{Name: name, StartedAt: at})
 }
 
-// recentCategoryForTask returns the category of the most recent task entry
-// matching name. The bool indicates whether a non-empty category was found.
-func recentCategoryForTask(tasks []Task, name string) (string, bool) {
-	for i := len(tasks) - 1; i >= 0; i-- {
-		if tasks[i].Name == name && tasks[i].Category != "" {
-			return tasks[i].Category, true
-		}
-	}
-	return "", false
-}
-
 // recentTaskNames returns up to 9 unique task names from the session history,
 // most-recently-started first, excluding the currently active task.
 func recentTaskNames(tasks []Task) []string {
@@ -71,29 +60,6 @@ func recentTaskNames(tasks []Task) []string {
 	return names
 }
 
-// handleNamingInput processes keyboard input while in naming mode (pomodoro rename).
-func (m Model) handleNamingInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
-	switch msg.Code {
-	case tea.KeyEnter:
-		m.currentPomodoroName = m.nameInput
-		m.namingMode = false
-		m.nameInput = ""
-	case tea.KeyEscape:
-		m.namingMode = false
-		m.nameInput = ""
-	case tea.KeyBackspace, tea.KeyDelete:
-		if len(m.nameInput) > 0 {
-			_, size := utf8.DecodeLastRuneInString(m.nameInput)
-			m.nameInput = m.nameInput[:len(m.nameInput)-size]
-		}
-	default:
-		if msg.Text != "" {
-			m.nameInput += msg.Text
-		}
-	}
-	return m, nil
-}
-
 // handleTaskInput processes keyboard input while in task mode.
 func (m Model) handleTaskInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 	switch msg.Code {
@@ -103,12 +69,7 @@ func (m Model) handleTaskInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 		m.taskInput = ""
 		m.recentTasks = nil
 		if name != "" {
-			if len(m.categories) > 0 {
-				m.pendingTask = name
-				m.categoryMode = true
-			} else {
-				m.startTask(name, time.Now())
-			}
+			m.startTask(name, time.Now())
 		}
 	case tea.KeyEscape:
 		m.taskMode = false
@@ -128,45 +89,13 @@ func (m Model) handleTaskInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
 					name := m.recentTasks[idx]
 					m.taskMode = false
 					m.recentTasks = nil
-					if cat, found := recentCategoryForTask(m.tasks, name); found {
-						m.startTask(name, time.Now())
-						m.tasks[len(m.tasks)-1].Category = cat
-					} else if len(m.categories) > 0 {
-						m.pendingTask = name
-						m.categoryMode = true
-					} else {
-						m.startTask(name, time.Now())
-					}
+					m.startTask(name, time.Now())
 					return m, nil
 				}
 			}
 		}
 		if msg.Text != "" {
 			m.taskInput += msg.Text
-		}
-	}
-	return m, nil
-}
-
-// handleCategoryInput processes keyboard input while in category mode (step 2 of task creation).
-func (m Model) handleCategoryInput(msg tea.KeyPressMsg) (Model, tea.Cmd) {
-	switch msg.Code {
-	case tea.KeyEscape:
-		m.categoryMode = false
-		m.pendingTask = ""
-	default:
-		if msg.Text == "0" {
-			m.startTask(m.pendingTask, time.Now())
-			m.categoryMode = false
-			m.pendingTask = ""
-		} else if len(msg.Text) == 1 && msg.Text[0] >= '1' && msg.Text[0] <= '9' {
-			idx := int(msg.Text[0]-'0') - 1
-			if idx < len(m.categories) {
-				m.startTask(m.pendingTask, time.Now())
-				m.tasks[len(m.tasks)-1].Category = m.categories[idx]
-				m.categoryMode = false
-				m.pendingTask = ""
-			}
 		}
 	}
 	return m, nil

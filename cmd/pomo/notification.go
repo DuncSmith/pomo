@@ -1,19 +1,18 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
 	"runtime"
 )
 
-func sendNotification(isRest bool, pomodoroName string) {
+func sendNotification(isRest bool) {
 	var title, message string
 	if isRest {
 		title = "☕ Break Timer"
 		message = "Your break is complete!"
 	} else {
 		title = "🍅 Pomodoro Timer"
-		message = fmt.Sprintf("Pomodoro '%s' is complete!", pomodoroName)
+		message = "Pomodoro is complete!"
 	}
 
 	if runtime.GOOS == "darwin" {

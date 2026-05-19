@@ -23,9 +23,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.PomodorosPerCycle != 4 {
 		t.Errorf("Expected PomodorosPerCycle 4, got %d", cfg.PomodorosPerCycle)
 	}
-	if cfg.AutoStartWork {
-		t.Error("Expected AutoStartWork to be false by default")
-	}
 	if !cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be true by default")
 	}
@@ -87,7 +84,7 @@ func TestLoadConfigParsesValues(t *testing.T) {
 		t.Fatalf("Could not create config dir: %v", err)
 	}
 
-	content := "pomodoro_time: 30\nshort_break_time: 7\nlong_break_time: 15\npomodoros_per_cycle: 3\nauto_start_work: true\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
+	content := "pomodoro_time: 30\nshort_break_time: 7\nlong_break_time: 15\npomodoros_per_cycle: 3\nsession_summary:\n  create_session_summary: false\n  summary_folder: /custom/path\n"
 	configFile := filepath.Join(configDir, "config.yaml")
 	if err := os.WriteFile(configFile, []byte(content), 0644); err != nil {
 		t.Fatalf("Could not write config file: %v", err)
@@ -112,9 +109,6 @@ func TestLoadConfigParsesValues(t *testing.T) {
 	}
 	if cfg.PomodorosPerCycle != 3 {
 		t.Errorf("Expected PomodorosPerCycle 3, got %d", cfg.PomodorosPerCycle)
-	}
-	if !cfg.AutoStartWork {
-		t.Error("Expected AutoStartWork to be true")
 	}
 	if cfg.SessionSummary.Create {
 		t.Error("Expected SessionSummary.Create to be false")

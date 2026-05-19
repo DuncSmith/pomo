@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,41 +14,13 @@ func TestFormatTime(t *testing.T) {
 		input    time.Duration
 		expected string
 	}{
-		{
-			name:     "zero duration",
-			input:    0,
-			expected: "00:00",
-		},
-		{
-			name:     "seconds only",
-			input:    30 * time.Second,
-			expected: "00:30",
-		},
-		{
-			name:     "minutes only",
-			input:    5 * time.Minute,
-			expected: "05:00",
-		},
-		{
-			name:     "minutes and seconds",
-			input:    3*time.Minute + 45*time.Second,
-			expected: "03:45",
-		},
-		{
-			name:     "double digit minutes",
-			input:    25*time.Minute + 10*time.Second,
-			expected: "25:10",
-		},
-		{
-			name:     "hours converted to minutes",
-			input:    time.Hour + 30*time.Minute + 15*time.Second,
-			expected: "90:15",
-		},
-		{
-			name:     "single digit second",
-			input:    2*time.Minute + 5*time.Second,
-			expected: "02:05",
-		},
+		{name: "zero duration", input: 0, expected: "00:00"},
+		{name: "seconds only", input: 30 * time.Second, expected: "00:30"},
+		{name: "minutes only", input: 5 * time.Minute, expected: "05:00"},
+		{name: "minutes and seconds", input: 3*time.Minute + 45*time.Second, expected: "03:45"},
+		{name: "double digit minutes", input: 25*time.Minute + 10*time.Second, expected: "25:10"},
+		{name: "hours converted to minutes", input: time.Hour + 30*time.Minute + 15*time.Second, expected: "90:15"},
+		{name: "single digit second", input: 2*time.Minute + 5*time.Second, expected: "02:05"},
 	}
 
 	for _, tt := range tests {
@@ -64,7 +35,7 @@ func TestFormatTime(t *testing.T) {
 
 func TestPhaseDuration(t *testing.T) {
 	m := Model{
-		pomodoroDuration: 50 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
 		shortBreakDuration: 10 * time.Minute,
 	}
 
@@ -109,7 +80,7 @@ func TestPhaseTransitionWorkToRest(t *testing.T) {
 	}
 }
 
-func TestPhaseTransitionRestToWork(t *testing.T) {
+func TestPhaseTransitionRestToWorkAutoStarts(t *testing.T) {
 	m := Model{
 		pomodoroDuration:   50 * time.Minute,
 		shortBreakDuration: 10 * time.Minute,
@@ -117,7 +88,6 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 		pomodorosPerCycle:  4,
 		remaining:          0,
 		isRest:             true,
-		autoStartWork:      true,
 		pomodorosCompleted: 0,
 		totalWorked:        50 * time.Minute,
 		tasks:              []Task{},
@@ -127,7 +97,7 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 	model := result.(Model)
 
 	if model.isRest {
-		t.Error("Expected model to switch to work phase")
+		t.Error("Expected model to switch to work phase automatically")
 	}
 	if model.remaining != 50*time.Minute {
 		t.Errorf("Expected remaining to be 50m, got %v", model.remaining)
@@ -140,56 +110,6 @@ func TestPhaseTransitionRestToWork(t *testing.T) {
 	}
 	if cmd == nil {
 		t.Error("Expected tickCmd to be returned")
-	}
-}
-
-func TestPhaseTransitionRestWaitsForConfirmationByDefault(t *testing.T) {
-	m := Model{
-		pomodoroDuration:   50 * time.Minute,
-		shortBreakDuration: 10 * time.Minute,
-		longBreakDuration:  20 * time.Minute,
-		pomodorosPerCycle:  4,
-		remaining:          0,
-		isRest:             true,
-		pomodorosCompleted: 0,
-		totalWorked:        50 * time.Minute,
-		tasks:              []Task{},
-	}
-
-	result, cmd := m.Update(finishedMsg{})
-	model := result.(Model)
-
-	if !model.isRest {
-		t.Error("Expected model to remain in rest phase while waiting for confirmation")
-	}
-	if !model.waitingForWorkStart {
-		t.Error("Expected waitingForWorkStart to be true")
-	}
-	if model.totalRested != 0 {
-		t.Errorf("Expected totalRested to stay 0 until work is confirmed, got %v", model.totalRested)
-	}
-	if cmd == nil {
-		t.Error("Expected tickCmd while waiting for confirmation")
-	}
-
-	model.restFinishedAt = time.Now().Add(-3 * time.Second)
-	result, cmd = model.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
-	model = result.(Model)
-
-	if model.isRest {
-		t.Error("Expected model to switch to work phase after keypress")
-	}
-	if model.waitingForWorkStart {
-		t.Error("Expected waitingForWorkStart to be false after keypress")
-	}
-	if model.pomodorosCompleted != 1 {
-		t.Errorf("Expected 1 completed pomodoro, got %d", model.pomodorosCompleted)
-	}
-	if model.totalRested < 10*time.Minute+3*time.Second {
-		t.Errorf("Expected totalRested to include wait time, got %v", model.totalRested)
-	}
-	if cmd != nil {
-		t.Error("Expected nil cmd after confirming work start (tick loop already running)")
 	}
 }
 
@@ -212,49 +132,6 @@ func TestQuitTracksPartialProgress(t *testing.T) {
 	}
 	if model.totalWorked != 20*time.Minute {
 		t.Errorf("Expected 20m partial work tracked, got %v", model.totalWorked)
-	}
-}
-
-func TestViewShowsReadyToWorkPrompt(t *testing.T) {
-	m := Model{
-		isRest:              true,
-		waitingForWorkStart: true,
-	}
-
-	view := fmt.Sprintf("%v", m.View())
-	if !strings.Contains(view, "Press any key to begin work") {
-		t.Errorf("Expected ready-to-work prompt in view, got %q", view)
-	}
-}
-
-func TestGeneratePomodoroName(t *testing.T) {
-	tests := []struct {
-		name     string
-		n        int
-		hour     int
-		expected string
-	}{
-		{name: "morning first", n: 1, hour: 8, expected: "Morning #1"},
-		{name: "morning boundary start", n: 2, hour: 0, expected: "Morning #2"},
-		{name: "morning boundary end", n: 3, hour: 11, expected: "Morning #3"},
-		{name: "afternoon first", n: 1, hour: 12, expected: "Afternoon #1"},
-		{name: "afternoon mid", n: 4, hour: 14, expected: "Afternoon #4"},
-		{name: "afternoon boundary end", n: 2, hour: 16, expected: "Afternoon #2"},
-		{name: "evening start", n: 1, hour: 17, expected: "Evening #1"},
-		{name: "evening mid", n: 3, hour: 19, expected: "Evening #3"},
-		{name: "evening boundary end", n: 2, hour: 20, expected: "Evening #2"},
-		{name: "night start", n: 1, hour: 21, expected: "Night #1"},
-		{name: "night late", n: 5, hour: 23, expected: "Night #5"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			now := time.Date(2026, 1, 1, tt.hour, 0, 0, 0, time.UTC)
-			result := generatePomodoroName(tt.n, now)
-			if result != tt.expected {
-				t.Errorf("generatePomodoroName(%d, hour=%d): expected %q, got %q", tt.n, tt.hour, tt.expected, result)
-			}
-		})
 	}
 }
 
@@ -289,14 +166,12 @@ func TestStartTaskEndsExistingTask(t *testing.T) {
 	if len(m.tasks) != 2 {
 		t.Fatalf("Expected 2 tasks, got %d", len(m.tasks))
 	}
-	// First task should be ended
 	if m.tasks[0].EndedAt.IsZero() {
 		t.Error("Expected first task to be ended")
 	}
 	if !m.tasks[0].EndedAt.Equal(later) {
 		t.Errorf("Expected first task EndedAt %v, got %v", later, m.tasks[0].EndedAt)
 	}
-	// Second task should be active
 	if !m.tasks[1].EndedAt.IsZero() {
 		t.Error("Expected second task to still be active")
 	}
@@ -305,7 +180,6 @@ func TestStartTaskEndsExistingTask(t *testing.T) {
 func TestActiveTask(t *testing.T) {
 	m := Model{tasks: []Task{}}
 
-	// No tasks: no active task
 	if m.activeTask() != nil {
 		t.Error("Expected nil active task when no tasks")
 	}
@@ -321,7 +195,6 @@ func TestActiveTask(t *testing.T) {
 		t.Errorf("Expected active task name 'My task', got %q", active.Name)
 	}
 
-	// End the task
 	m.endActiveTask(now.Add(5 * time.Minute))
 	if m.activeTask() != nil {
 		t.Error("Expected no active task after ending it")
@@ -331,9 +204,9 @@ func TestActiveTask(t *testing.T) {
 func TestTransitionToBreakEndsActiveTask(t *testing.T) {
 	start := time.Now()
 	m := Model{
-		pomodoroDuration: 50 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
 		shortBreakDuration: 10 * time.Minute,
-		tasks:        []Task{},
+		tasks:              []Task{},
 	}
 	m.startTask("Active task", start)
 
@@ -350,13 +223,12 @@ func TestTransitionToBreakEndsActiveTask(t *testing.T) {
 func TestTransitionToPomodoroContinuesLastTask(t *testing.T) {
 	start := time.Now()
 	m := Model{
-		pomodoroDuration:       50 * time.Minute,
-		shortBreakDuration:       10 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		pomodorosCompleted: 0,
 		isRest:             true,
 		tasks:              []Task{},
 	}
-	// Simulate a task that was ended when rest began
 	m.tasks = append(m.tasks, Task{
 		Name:      "Carry forward task",
 		StartedAt: start,
@@ -365,7 +237,6 @@ func TestTransitionToPomodoroContinuesLastTask(t *testing.T) {
 
 	m = m.transitionToPomodoro(10*time.Minute, time.Now())
 
-	// Should have created a new task entry continuing the last task name
 	if len(m.tasks) != 2 {
 		t.Fatalf("Expected 2 task entries, got %d", len(m.tasks))
 	}
@@ -379,8 +250,8 @@ func TestTransitionToPomodoroContinuesLastTask(t *testing.T) {
 
 func TestTransitionToPomodoroNoTasksNoContinuation(t *testing.T) {
 	m := Model{
-		pomodoroDuration:       50 * time.Minute,
-		shortBreakDuration:       10 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
+		shortBreakDuration: 10 * time.Minute,
 		pomodorosCompleted: 0,
 		isRest:             true,
 		tasks:              []Task{},
@@ -388,7 +259,6 @@ func TestTransitionToPomodoroNoTasksNoContinuation(t *testing.T) {
 
 	m = m.transitionToPomodoro(10*time.Minute, time.Now())
 
-	// No tasks to continue
 	if len(m.tasks) != 0 {
 		t.Errorf("Expected 0 tasks when no previous task, got %d", len(m.tasks))
 	}
@@ -434,14 +304,14 @@ func TestPhaseDurationLongBreak(t *testing.T) {
 		shortBreakDuration: 5 * time.Minute,
 		longBreakDuration:  15 * time.Minute,
 		pomodorosPerCycle:  4,
-		pomodorosCompleted: 3, // 4th pomodoro just completed
+		pomodorosCompleted: 3,
 		isRest:             true,
 	}
 	if m.phaseDuration() != 15*time.Minute {
 		t.Errorf("Expected phaseDuration to be 15m (long break), got %v", m.phaseDuration())
 	}
 
-	m.pomodorosCompleted = 0 // 1st pomodoro just completed
+	m.pomodorosCompleted = 0
 	if m.phaseDuration() != 5*time.Minute {
 		t.Errorf("Expected phaseDuration to be 5m (short break), got %v", m.phaseDuration())
 	}
@@ -452,34 +322,13 @@ func TestPhaseDurationLongBreak(t *testing.T) {
 	}
 }
 
-func TestTransitionToPomodoroGeneratesNewName(t *testing.T) {
-	m := Model{
-		pomodoroDuration:        50 * time.Minute,
-		shortBreakDuration:        10 * time.Minute,
-		pomodorosCompleted:  0,
-		isRest:              true,
-		currentPomodoroName: "My Custom Name",
-		tasks:               []Task{},
-	}
-
-	m = m.transitionToPomodoro(10*time.Minute, time.Now())
-
-	// Name should be auto-generated, not the old custom name
-	if m.currentPomodoroName == "My Custom Name" {
-		t.Error("Expected pomodoro name to be reset on new work phase, not carry over the custom name")
-	}
-	if m.currentPomodoroName == "" {
-		t.Error("Expected pomodoro name to be set to an auto-generated value")
-	}
-}
-
 func TestTaskKeyOpensTaskMode(t *testing.T) {
 	m := Model{
-		pomodoroDuration: 50 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
 		shortBreakDuration: 10 * time.Minute,
-		remaining:    40 * time.Minute,
-		isRest:       false,
-		tasks:        []Task{},
+		remaining:          40 * time.Minute,
+		isRest:             false,
+		tasks:              []Task{},
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
@@ -492,11 +341,11 @@ func TestTaskKeyOpensTaskMode(t *testing.T) {
 
 func TestTaskKeyDisabledDuringRest(t *testing.T) {
 	m := Model{
-		pomodoroDuration: 50 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
 		shortBreakDuration: 10 * time.Minute,
-		remaining:    8 * time.Minute,
-		isRest:       true,
-		tasks:        []Task{},
+		remaining:          8 * time.Minute,
+		isRest:             true,
+		tasks:              []Task{},
 	}
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
@@ -514,7 +363,6 @@ func TestTaskInputConfirm(t *testing.T) {
 		taskInput: "Fix bug",
 		tasks:     []Task{},
 	}
-	// Simulate a prior active task to confirm it gets ended
 	m.tasks = append(m.tasks, Task{Name: "Old task", StartedAt: now.Add(-10 * time.Minute)})
 
 	result, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -526,7 +374,6 @@ func TestTaskInputConfirm(t *testing.T) {
 	if model.taskInput != "" {
 		t.Error("Expected taskInput to be cleared after confirming")
 	}
-	// Should have ended old task and created new one
 	if len(model.tasks) != 2 {
 		t.Fatalf("Expected 2 tasks, got %d", len(model.tasks))
 	}
@@ -567,7 +414,7 @@ func TestRecentTaskNamesExcludesActive(t *testing.T) {
 	now := time.Now()
 	tasks := []Task{
 		{Name: "task1", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
-		{Name: "task2", StartedAt: now.Add(10 * time.Minute)}, // active (zero EndedAt)
+		{Name: "task2", StartedAt: now.Add(10 * time.Minute)},
 	}
 	names := recentTaskNames(tasks)
 	for _, n := range names {
@@ -607,7 +454,6 @@ func TestRecentTaskNamesDeduplicated(t *testing.T) {
 	if len(names) != 2 {
 		t.Fatalf("Expected 2 deduplicated names, got %v", names)
 	}
-	// task1 appeared most recently, so it should be first
 	if names[0] != "task1" || names[1] != "task2" {
 		t.Errorf("Expected [task1 task2], got %v", names)
 	}
@@ -716,10 +562,10 @@ func TestTaskPickerDigitAfterTypingIsText(t *testing.T) {
 func TestTaskKeyPopulatesRecentTasks(t *testing.T) {
 	now := time.Now()
 	m := Model{
-		pomodoroDuration: 50 * time.Minute,
+		pomodoroDuration:   50 * time.Minute,
 		shortBreakDuration: 10 * time.Minute,
-		remaining:    40 * time.Minute,
-		isRest:       false,
+		remaining:          40 * time.Minute,
+		isRest:             false,
 		tasks: []Task{
 			{Name: "old task", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
 		},
@@ -742,7 +588,7 @@ func TestSkipWorkTracksPartialTime(t *testing.T) {
 		shortBreakDuration: 10 * time.Minute,
 		longBreakDuration:  20 * time.Minute,
 		pomodorosPerCycle:  4,
-		remaining:          30 * time.Minute, // 20 minutes into work
+		remaining:          30 * time.Minute,
 		isRest:             false,
 		tasks:              []Task{},
 	}
@@ -764,7 +610,7 @@ func TestSkipRestTracksPartialTime(t *testing.T) {
 		shortBreakDuration: 10 * time.Minute,
 		longBreakDuration:  20 * time.Minute,
 		pomodorosPerCycle:  4,
-		remaining:          7 * time.Minute, // 3 minutes into rest
+		remaining:          7 * time.Minute,
 		isRest:             true,
 		tasks:              []Task{},
 	}
@@ -777,234 +623,5 @@ func TestSkipRestTracksPartialTime(t *testing.T) {
 	}
 	if model.isRest {
 		t.Error("Expected to transition to work phase after skipping rest")
-	}
-}
-
-func TestRecentCategoryForTask(t *testing.T) {
-	now := time.Now()
-	tasks := []Task{
-		{Name: "emails", Category: "chore", StartedAt: now, EndedAt: now.Add(5 * time.Minute)},
-		{Name: "design", Category: "strategy work", StartedAt: now.Add(5 * time.Minute), EndedAt: now.Add(15 * time.Minute)},
-		{Name: "emails", Category: "meeting prep", StartedAt: now.Add(15 * time.Minute), EndedAt: now.Add(20 * time.Minute)},
-	}
-
-	// Should return the most recent category for "emails"
-	cat, found := recentCategoryForTask(tasks, "emails")
-	if !found || cat != "meeting prep" {
-		t.Errorf("Expected ('meeting prep', true), got (%q, %v)", cat, found)
-	}
-
-	// Should return category for "design"
-	cat, found = recentCategoryForTask(tasks, "design")
-	if !found || cat != "strategy work" {
-		t.Errorf("Expected ('strategy work', true), got (%q, %v)", cat, found)
-	}
-
-	// Unknown task returns not found
-	cat, found = recentCategoryForTask(tasks, "unknown")
-	if found {
-		t.Errorf("Expected not found for unknown task, got (%q, %v)", cat, found)
-	}
-
-	// Uncategorised task returns not found
-	uncatTasks := []Task{
-		{Name: "emails", Category: "", StartedAt: now, EndedAt: now.Add(5 * time.Minute)},
-	}
-	cat, found = recentCategoryForTask(uncatTasks, "emails")
-	if found {
-		t.Errorf("Expected not found for uncategorised task, got (%q, %v)", cat, found)
-	}
-}
-
-func TestTaskPickerResumeCategorisedTaskSkipsCategoryMode(t *testing.T) {
-	now := time.Now()
-	m := Model{
-		taskMode:    true,
-		taskInput:   "",
-		recentTasks: []string{"emails"},
-		categories:  []string{"chore", "meeting prep", "technical work"},
-		tasks: []Task{
-			{Name: "emails", Category: "meeting prep", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
-		},
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
-	model := result.(Model)
-
-	if model.taskMode {
-		t.Error("Expected taskMode to be false")
-	}
-	if model.categoryMode {
-		t.Error("Expected categoryMode to be false — categorised task should skip category picker")
-	}
-	active := model.activeTask()
-	if active == nil || active.Name != "emails" {
-		t.Errorf("Expected active task 'emails', got %v", active)
-	}
-	if active != nil && active.Category != "meeting prep" {
-		t.Errorf("Expected category 'meeting prep', got %q", active.Category)
-	}
-}
-
-func TestTaskPickerResumeUncategorisedTaskEntersCategoryMode(t *testing.T) {
-	now := time.Now()
-	m := Model{
-		taskMode:    true,
-		taskInput:   "",
-		recentTasks: []string{"emails"},
-		categories:  []string{"chore", "meeting prep"},
-		tasks: []Task{
-			{Name: "emails", Category: "", StartedAt: now, EndedAt: now.Add(10 * time.Minute)},
-		},
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: '1', Text: "1"})
-	model := result.(Model)
-
-	if model.taskMode {
-		t.Error("Expected taskMode to be false")
-	}
-	if !model.categoryMode {
-		t.Error("Expected categoryMode to be true for uncategorised task")
-	}
-	if model.pendingTask != "emails" {
-		t.Errorf("Expected pendingTask 'emails', got %q", model.pendingTask)
-	}
-}
-
-func TestResetPomodoroResetsTimer(t *testing.T) {
-	now := time.Now()
-	m := Model{
-		pomodoroDuration:      50 * time.Minute,
-		shortBreakDuration:      10 * time.Minute,
-		remaining:         30 * time.Minute, // 20 mins elapsed
-		isRest:            false,
-		totalWorked:       0,
-		tasks:             []Task{},
-		pomodoroStartedAt: now.Add(-20 * time.Minute),
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
-	model := result.(Model)
-
-	if model.remaining != 50*time.Minute {
-		t.Errorf("Expected remaining reset to 50m, got %v", model.remaining)
-	}
-	if model.totalWorked != 0 {
-		t.Error("Expected totalWorked to remain 0 (elapsed time discarded)")
-	}
-}
-
-func TestResetPomodoroRemovesCurrentPomodoroTasks(t *testing.T) {
-	intervalStart := time.Now()
-	oldTask := Task{
-		Name:      "old task",
-		StartedAt: intervalStart.Add(-60 * time.Minute), // from a previous interval
-		EndedAt:   intervalStart.Add(-10 * time.Minute),
-	}
-	currentTask := Task{
-		Name:      "current task",
-		StartedAt: intervalStart.Add(5 * time.Minute), // started during this interval
-	}
-
-	m := Model{
-		pomodoroDuration:      50 * time.Minute,
-		shortBreakDuration:      10 * time.Minute,
-		remaining:         30 * time.Minute,
-		isRest:            false,
-		tasks:             []Task{oldTask, currentTask},
-		pomodoroStartedAt: intervalStart,
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
-	model := result.(Model)
-
-	if len(model.tasks) != 1 {
-		t.Fatalf("Expected 1 task after reset, got %d", len(model.tasks))
-	}
-	if model.tasks[0].Name != "old task" {
-		t.Errorf("Expected preserved task to be 'old task', got %q", model.tasks[0].Name)
-	}
-}
-
-func TestResetPomodoroIgnoredDuringRest(t *testing.T) {
-	m := Model{
-		pomodoroDuration: 50 * time.Minute,
-		shortBreakDuration: 10 * time.Minute,
-		remaining:    5 * time.Minute,
-		isRest:       true,
-		tasks:        []Task{},
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
-	model := result.(Model)
-
-	if model.remaining != 5*time.Minute {
-		t.Errorf("Expected remaining unchanged at 5m during rest, got %v", model.remaining)
-	}
-}
-
-func TestResetPomodoroClearsInputModes(t *testing.T) {
-	now := time.Now()
-	m := Model{
-		pomodoroDuration:      50 * time.Minute,
-		shortBreakDuration:      10 * time.Minute,
-		remaining:         30 * time.Minute,
-		isRest:            false,
-		tasks:             []Task{},
-		pomodoroStartedAt: now,
-	}
-
-	// Test that resetPomodoro clears all modes directly
-	m.namingMode = true
-	m.nameInput = "test"
-	m.taskMode = true
-	m.taskInput = "test"
-	m.categoryMode = true
-	m.pendingTask = "test"
-	m.recentTasks = []string{"a", "b"}
-
-	result := m.resetPomodoro()
-
-	if result.namingMode {
-		t.Error("Expected namingMode to be cleared")
-	}
-	if result.nameInput != "" {
-		t.Error("Expected nameInput to be cleared")
-	}
-	if result.taskMode {
-		t.Error("Expected taskMode to be cleared")
-	}
-	if result.taskInput != "" {
-		t.Error("Expected taskInput to be cleared")
-	}
-	if result.categoryMode {
-		t.Error("Expected categoryMode to be cleared")
-	}
-	if result.pendingTask != "" {
-		t.Error("Expected pendingTask to be cleared")
-	}
-	if result.recentTasks != nil {
-		t.Error("Expected recentTasks to be cleared")
-	}
-}
-
-func TestResetPomodoroPreservesTotalWorkedFromPriorPomodoros(t *testing.T) {
-	now := time.Now()
-	m := Model{
-		pomodoroDuration:      50 * time.Minute,
-		shortBreakDuration:      10 * time.Minute,
-		remaining:         30 * time.Minute,
-		isRest:            false,
-		totalWorked:       50 * time.Minute, // from a prior completed interval
-		tasks:             []Task{},
-		pomodoroStartedAt: now.Add(-20 * time.Minute),
-	}
-
-	result, _ := m.Update(tea.KeyPressMsg{Code: -1, Text: "r"})
-	model := result.(Model)
-
-	if model.totalWorked != 50*time.Minute {
-		t.Errorf("Expected totalWorked to remain 50m (prior interval preserved), got %v", model.totalWorked)
 	}
 }

@@ -27,9 +27,6 @@ func main() {
 	case "version":
 		fmt.Println(result.versionInfo)
 		os.Exit(0)
-	case "report":
-		runReport(cfg, *result.reportArgs)
-		return
 	case "init":
 		path, err := configPath()
 		if err != nil {
@@ -41,7 +38,6 @@ func main() {
 			return
 		}
 		initCfg := defaultConfig()
-		initCfg.Categories = processCategories(builtinCategories)
 		if err := writeDefaultConfig(path, initCfg); err != nil {
 			fmt.Fprintln(os.Stderr, "error: could not write config:", err)
 			os.Exit(1)
@@ -49,13 +45,6 @@ func main() {
 		fmt.Println("Config written to", path)
 		return
 	}
-
-	// CLI flag overrides config file value
-	if result.createSessionSummary != nil {
-		cfg.SessionSummary.Create = *result.createSessionSummary
-	}
-
-	result.model.categories = cfg.Categories
 
 	p := tea.NewProgram(*result.model)
 	finalModel, err := p.Run()
@@ -68,14 +57,6 @@ func main() {
 		printSummary(m)
 		if err := writeSummaryFile(m, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: could not save summary file: %v\n", err)
-		}
-		if db, err := openDB(); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: could not open database: %v\n", err)
-		} else {
-			defer db.Close()
-			if _, err := insertSession(db, m); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: could not save session to database: %v\n", err)
-			}
 		}
 	}
 }

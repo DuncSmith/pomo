@@ -34,66 +34,18 @@ func TestParseDuration(t *testing.T) {
 		expected time.Duration
 		hasError bool
 	}{
-		{
-			name:     "minutes with m suffix",
-			input:    "30m",
-			expected: 30 * time.Minute,
-		},
-		{
-			name:     "seconds with s suffix",
-			input:    "45s",
-			expected: 45 * time.Second,
-		},
-		{
-			name:     "number without suffix defaults to minutes",
-			input:    "25",
-			expected: 25 * time.Minute,
-		},
-		{
-			name:     "single digit minute",
-			input:    "5m",
-			expected: 5 * time.Minute,
-		},
-		{
-			name:     "single digit second",
-			input:    "10s",
-			expected: 10 * time.Second,
-		},
-		{
-			name:     "zero minutes",
-			input:    "0m",
-			expected: 0 * time.Minute,
-		},
-		{
-			name:     "zero seconds",
-			input:    "0s",
-			expected: 0 * time.Second,
-		},
-		{
-			name:     "invalid number with m suffix",
-			input:    "abcm",
-			hasError: true,
-		},
-		{
-			name:     "invalid number with s suffix",
-			input:    "abcs",
-			hasError: true,
-		},
-		{
-			name:     "invalid number without suffix",
-			input:    "abc",
-			hasError: true,
-		},
-		{
-			name:     "empty string",
-			input:    "",
-			hasError: true,
-		},
-		{
-			name:     "negative number",
-			input:    "-5m",
-			expected: -5 * time.Minute,
-		},
+		{name: "minutes with m suffix", input: "30m", expected: 30 * time.Minute},
+		{name: "seconds with s suffix", input: "45s", expected: 45 * time.Second},
+		{name: "number without suffix defaults to minutes", input: "25", expected: 25 * time.Minute},
+		{name: "single digit minute", input: "5m", expected: 5 * time.Minute},
+		{name: "single digit second", input: "10s", expected: 10 * time.Second},
+		{name: "zero minutes", input: "0m", expected: 0 * time.Minute},
+		{name: "zero seconds", input: "0s", expected: 0 * time.Second},
+		{name: "invalid number with m suffix", input: "abcm", hasError: true},
+		{name: "invalid number with s suffix", input: "abcs", hasError: true},
+		{name: "invalid number without suffix", input: "abc", hasError: true},
+		{name: "empty string", input: "", hasError: true},
+		{name: "negative number", input: "-5m", expected: -5 * time.Minute},
 	}
 
 	for _, tt := range tests {
@@ -126,7 +78,6 @@ func TestParseArgs(t *testing.T) {
 		shortBreak        time.Duration
 		longBreak         time.Duration
 		pomodorosPerCycle int
-		autoStart         bool
 	}{
 		{
 			name:              "defaults (no args)",
@@ -168,140 +119,19 @@ func TestParseArgs(t *testing.T) {
 			longBreak:         10 * time.Minute,
 			pomodorosPerCycle: 4,
 		},
-		{
-			name:              "custom short break",
-			args:              []string{"--short-break", "8"},
-			pomodoroDuration:  25 * time.Minute,
-			shortBreak:        8 * time.Minute,
-			longBreak:         10 * time.Minute,
-			pomodorosPerCycle: 4,
-		},
-		{
-			name:              "custom long break",
-			args:              []string{"--long-break", "20"},
-			pomodoroDuration:  25 * time.Minute,
-			shortBreak:        5 * time.Minute,
-			longBreak:         20 * time.Minute,
-			pomodorosPerCycle: 4,
-		},
-		{
-			name:              "custom per-cycle",
-			args:              []string{"--per-cycle", "3"},
-			pomodoroDuration:  25 * time.Minute,
-			shortBreak:        5 * time.Minute,
-			longBreak:         10 * time.Minute,
-			pomodorosPerCycle: 3,
-		},
-		{
-			name:              "all flags combined",
-			args:              []string{"-w", "50", "-s", "10", "-l", "20", "-c", "3"},
-			pomodoroDuration:  50 * time.Minute,
-			shortBreak:        10 * time.Minute,
-			longBreak:         20 * time.Minute,
-			pomodorosPerCycle: 3,
-		},
-		{
-			name:              "auto start work flag",
-			args:              []string{"--auto-start-work"},
-			pomodoroDuration:  25 * time.Minute,
-			shortBreak:        5 * time.Minute,
-			longBreak:         10 * time.Minute,
-			pomodorosPerCycle: 4,
-			autoStart:         true,
-		},
-		{
-			name:              "short break with m suffix",
-			args:              []string{"-w", "30", "--short-break", "7m"},
-			pomodoroDuration:  30 * time.Minute,
-			shortBreak:        7 * time.Minute,
-			longBreak:         10 * time.Minute,
-			pomodorosPerCycle: 4,
-		},
-		{
-			name:         "help flag",
-			args:         []string{"-h"},
-			expectAction: "help",
-		},
-		{
-			name:         "help flag (long form)",
-			args:         []string{"--help"},
-			expectAction: "help",
-		},
-		{
-			name:         "version flag",
-			args:         []string{"-v"},
-			expectAction: "version",
-		},
-		{
-			name:         "version flag (long form)",
-			args:         []string{"--version"},
-			expectAction: "version",
-		},
-		{
-			name:        "invalid work duration",
-			args:        []string{"-w", "abc"},
-			expectError: true,
-		},
-		{
-			name:        "missing work value",
-			args:        []string{"-w"},
-			expectError: true,
-		},
-		{
-			name:        "unknown argument",
-			args:        []string{"badarg"},
-			expectError: true,
-		},
-		{
-			name:        "invalid short-break duration",
-			args:        []string{"--short-break", "xyz"},
-			expectError: true,
-		},
-		{
-			name:        "missing short-break value",
-			args:        []string{"--short-break"},
-			expectError: true,
-		},
-		{
-			name:        "invalid long-break duration",
-			args:        []string{"--long-break", "xyz"},
-			expectError: true,
-		},
-		{
-			name:        "missing long-break value",
-			args:        []string{"--long-break"},
-			expectError: true,
-		},
-		{
-			name:        "invalid per-cycle value",
-			args:        []string{"--per-cycle", "abc"},
-			expectError: true,
-		},
-		{
-			name:        "missing per-cycle value",
-			args:        []string{"--per-cycle"},
-			expectError: true,
-		},
-		{
-			name:        "zero work duration",
-			args:        []string{"-w", "0"},
-			expectError: true,
-		},
-		{
-			name:        "zero short break",
-			args:        []string{"-s", "0"},
-			expectError: true,
-		},
-		{
-			name:        "zero long break",
-			args:        []string{"-l", "0"},
-			expectError: true,
-		},
-		{
-			name:        "zero per-cycle",
-			args:        []string{"-c", "0"},
-			expectError: true,
-		},
+		{name: "help flag", args: []string{"-h"}, expectAction: "help"},
+		{name: "help flag (long form)", args: []string{"--help"}, expectAction: "help"},
+		{name: "version flag", args: []string{"-v"}, expectAction: "version"},
+		{name: "version flag (long form)", args: []string{"--version"}, expectAction: "version"},
+		{name: "init flag", args: []string{"--init"}, expectAction: "init"},
+		{name: "invalid work duration", args: []string{"-w", "abc"}, expectError: true},
+		{name: "missing work value", args: []string{"-w"}, expectError: true},
+		{name: "unknown argument", args: []string{"badarg"}, expectError: true},
+		{name: "removed --short-break flag is unknown", args: []string{"--short-break", "8"}, expectError: true},
+		{name: "removed --long-break flag is unknown", args: []string{"--long-break", "20"}, expectError: true},
+		{name: "removed --per-cycle flag is unknown", args: []string{"--per-cycle", "3"}, expectError: true},
+		{name: "removed --auto-start-work flag is unknown", args: []string{"--auto-start-work"}, expectError: true},
+		{name: "zero work duration", args: []string{"-w", "0"}, expectError: true},
 	}
 
 	for _, tt := range tests {
@@ -355,9 +185,6 @@ func TestParseArgs(t *testing.T) {
 			if m.pomodorosCompleted != 0 {
 				t.Errorf("Expected pomodorosCompleted to be 0, got %d", m.pomodorosCompleted)
 			}
-			if m.autoStartWork != tt.autoStart {
-				t.Errorf("Expected autoStartWork %v, got %v", tt.autoStart, m.autoStartWork)
-			}
 		})
 	}
 }
@@ -368,7 +195,6 @@ func TestParseArgsUsesConfigDefaults(t *testing.T) {
 		ShortBreakTime:    7,
 		LongBreakTime:     15,
 		PomodorosPerCycle: 3,
-		AutoStartWork:     true,
 		SessionSummary: SessionSummary{
 			Folder: "~/pomos",
 			Create: true,
@@ -390,50 +216,9 @@ func TestParseArgsUsesConfigDefaults(t *testing.T) {
 	if result.model.pomodorosPerCycle != 3 {
 		t.Errorf("Expected pomodorosPerCycle 3 from config, got %d", result.model.pomodorosPerCycle)
 	}
-	if !result.model.autoStartWork {
-		t.Error("Expected autoStartWork true from config")
-	}
 }
 
-func TestParseArgsCreateSessionSummaryFlag(t *testing.T) {
-	t.Run("--create-session-summary sets override to true", func(t *testing.T) {
-		result, err := parseArgs([]string{"--create-session-summary"}, defaultConfig())
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if result.createSessionSummary == nil {
-			t.Fatal("Expected createSessionSummary to be set, got nil")
-		}
-		if !*result.createSessionSummary {
-			t.Error("Expected createSessionSummary to be true")
-		}
-	})
-
-	t.Run("--no-create-session-summary sets override to false", func(t *testing.T) {
-		result, err := parseArgs([]string{"--no-create-session-summary"}, defaultConfig())
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if result.createSessionSummary == nil {
-			t.Fatal("Expected createSessionSummary to be set, got nil")
-		}
-		if *result.createSessionSummary {
-			t.Error("Expected createSessionSummary to be false")
-		}
-	})
-
-	t.Run("no flag leaves override as nil", func(t *testing.T) {
-		result, err := parseArgs([]string{}, defaultConfig())
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if result.createSessionSummary != nil {
-			t.Errorf("Expected createSessionSummary to be nil, got %v", *result.createSessionSummary)
-		}
-	})
-}
-
-func TestParseArgsCLIOverridesConfig(t *testing.T) {
+func TestParseArgsCLIWorkOverridesConfig(t *testing.T) {
 	cfg := Config{
 		PomodoroTime:      30,
 		ShortBreakTime:    7,
@@ -444,20 +229,20 @@ func TestParseArgsCLIOverridesConfig(t *testing.T) {
 			Create: true,
 		},
 	}
-	result, err := parseArgs([]string{"-w", "45", "-s", "8", "-l", "20", "-c", "5"}, cfg)
+	result, err := parseArgs([]string{"-w", "45"}, cfg)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 	if result.model.pomodoroDuration != 45*time.Minute {
 		t.Errorf("Expected CLI pomodoro 45m to override config 30m, got %v", result.model.pomodoroDuration)
 	}
-	if result.model.shortBreakDuration != 8*time.Minute {
-		t.Errorf("Expected CLI short-break 8m to override config 7m, got %v", result.model.shortBreakDuration)
+	if result.model.shortBreakDuration != 7*time.Minute {
+		t.Errorf("Expected shortBreakDuration 7m from config (untouched by CLI), got %v", result.model.shortBreakDuration)
 	}
-	if result.model.longBreakDuration != 20*time.Minute {
-		t.Errorf("Expected CLI long-break 20m to override config 15m, got %v", result.model.longBreakDuration)
+	if result.model.longBreakDuration != 15*time.Minute {
+		t.Errorf("Expected longBreakDuration 15m from config (untouched by CLI), got %v", result.model.longBreakDuration)
 	}
-	if result.model.pomodorosPerCycle != 5 {
-		t.Errorf("Expected CLI per-cycle 5 to override config 3, got %d", result.model.pomodorosPerCycle)
+	if result.model.pomodorosPerCycle != 3 {
+		t.Errorf("Expected pomodorosPerCycle 3 from config (untouched by CLI), got %d", result.model.pomodorosPerCycle)
 	}
 }
